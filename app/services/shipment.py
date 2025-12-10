@@ -2,8 +2,8 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas.shipment import ShipmentCreate
-from app.database.models import Shipment, ShipmentStatus
+from api.schemas.shipment import ShipmentCreate
+from database.models import Shipment, ShipmentStatus
 
 
 class ShipmentService:
@@ -11,8 +11,8 @@ class ShipmentService:
         # Get database session to perform database operations
         self.session = session
 
-    # Get a shipment by id 
-    async def get(self, id: int) -> Shipment:
+    # Get a shipment by id
+    async def get(self, id: int) -> Shipment | None:
         return await self.session.get(Shipment, id)
 
     # Add a new shipment
@@ -31,7 +31,14 @@ class ShipmentService:
     # Update an existing shipment
     async def update(self, id: int, shipment_update: dict) -> Shipment:
         shipment = await self.get(id)
-        shipment.sqlmodel_update(shipment_update)
+        if shipment is None:
+            # Caller should handle not-found cases; raise an error to make
+            # the failure explicit during runtime.
+            raise LookupError(f"Shipment with id {id} not found")
+
+        # Apply provided fields to the SQLModel instance
+        for key, value in shipment_update.items():
+            setattr(shipment, key, value)
 
         self.session.add(shipment)
         await self.session.commit()
