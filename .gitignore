@@ -2,3 +2,13 @@
 __pycache__/
 *.pyc
 .env
+
+# Scripts de desarrollo local
+check_deps.py
+
+# IDE configuration
+.vscode/
+
+# Python virtual environment
+venv/
+.venv/
