@@ -1,6 +1,17 @@
 from typing import Optional
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict  # type: ignore
+
+
+class SecuritySettings(BaseSettings):
+    JWT_SECRET: str = "your-secret-key-change-in-production"
+    JWT_ALGORITHM: str = "HS256"
+
+    model_config = SettingsConfigDict(
+        env_file="./.env",
+        env_ignore_empty=True,
+        extra="ignore",
+    )
 
 
 class DatabaseSettings(BaseSettings):
@@ -40,3 +51,4 @@ class DatabaseSettings(BaseSettings):
 
 
 settings = DatabaseSettings()
+security_settings = SecuritySettings()

@@ -1,27 +1,24 @@
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlmodel import SQLModel
 
 from config import settings
 
+
 # Create a database engine to connect with database
 engine = create_async_engine(
-    # database type/dialect and file name
     url=settings.POSTGRES_URL,
-    # Log sql queries
     echo=True,
 )
 
 
 async def create_db_tables():
     async with engine.begin() as connection:
-        from .models import Shipment  # noqa: F401
-
+        from .models import Shipment, Seller  # Import both models
         await connection.run_sync(SQLModel.metadata.create_all)
 
 
 async def get_session():
-    async_session = sessionmaker(
+    async_session = async_sessionmaker(
         bind=engine,
         class_=AsyncSession,
         expire_on_commit=False,

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
-
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from api.schemas.shipment import ShipmentCreate
 from database.models import Shipment, ShipmentStatus
@@ -8,45 +8,51 @@ from database.models import Shipment, ShipmentStatus
 
 class ShipmentService:
     def __init__(self, session: AsyncSession):
-        # Get database session to perform database operations
         self.session = session
 
-    # Get a shipment by id
-    async def get(self, id: int) -> Shipment | None:
+    async def get_all(self):
+        """Get all shipments"""
+        result = await self.session.execute(select(Shipment))
+        return result.scalars().all()
+
+    async def get_by_id(self, id: int) -> Shipment | None:
+        """Get a shipment by id"""
         return await self.session.get(Shipment, id)
 
-    # Add a new shipment
-    async def add(self, shipment_create: ShipmentCreate) -> Shipment:
+    async def create(self, shipment_create: ShipmentCreate) -> Shipment:
+        """Create a new shipment"""
         new_shipment = Shipment(
-            **shipment_create.model_dump(),
+            content=shipment_create.content,
+            weight_kg=shipment_create.weight,  # Note: schema uses 'weight' but model uses 'weight_kg'
+            seller_id=shipment_create.seller_id,  # Fixed: schema now uses 'seller_id'
             status=ShipmentStatus.placed,
             estimated_delivery=datetime.now() + timedelta(days=3),
         )
         self.session.add(new_shipment)
         await self.session.commit()
         await self.session.refresh(new_shipment)
-
         return new_shipment
 
-    # Update an existing shipment
-    async def update(self, id: int, shipment_update: dict) -> Shipment:
-        shipment = await self.get(id)
+    async def update(self, id: int, shipment_update: dict) -> Shipment | None:
+        """Update an existing shipment"""
+        shipment = await self.get_by_id(id)
         if shipment is None:
-            # Caller should handle not-found cases; raise an error to make
-            # the failure explicit during runtime.
-            raise LookupError(f"Shipment with id {id} not found")
+            return None
 
-        # Apply provided fields to the SQLModel instance
         for key, value in shipment_update.items():
-            setattr(shipment, key, value)
+            if hasattr(shipment, key):
+                setattr(shipment, key, value)
 
         self.session.add(shipment)
         await self.session.commit()
         await self.session.refresh(shipment)
-
         return shipment
 
-    # Delete a shipment
-    async def delete(self, id: int) -> None:
-        await self.session.delete(await self.get(id))
-        await self.session.commit()
+    async def delete(self, id: int) -> bool:
+        """Delete a shipment"""
+        shipment = await self.get_by_id(id)
+        if shipment:
+            await self.session.delete(shipment)
+            await self.session.commit()
+            return True
+        return False

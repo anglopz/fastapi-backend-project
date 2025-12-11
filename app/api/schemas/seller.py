@@ -7,10 +7,8 @@ class BaseSeller(BaseModel):
 
 
 class SellerRead(BaseSeller):
-    pass
+    id: int  # Added id field
+
 
 class SellerCreate(BaseSeller):
     password: str
-    
-
-

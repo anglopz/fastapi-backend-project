@@ -1,30 +1,28 @@
-from datetime import datetime, timedelta, timezone
+"""
+Utilidades generales de la aplicación
+"""
+# Reexportar funciones de core.security para compatibilidad
+from core.security import (
+    create_access_token,
+    verify_token,
+    hash_password,
+    verify_password,
+    get_password_context,
+    oauth2_scheme
+)
 
-import jwt
+__all__ = [
+    'create_access_token',
+    'verify_token', 
+    'hash_password',
+    'verify_password',
+    'get_password_context',
+    'oauth2_scheme'
+]
 
-from app.config import security_settings
-
-
-def generate_access_token(
-    data: dict,
-    expiry: timedelta = timedelta(days=7),
-) -> str:
-    return jwt.encode(
-        payload={
-            **data,
-            "exp": datetime.now(timezone.utc) + expiry,
-        },
-        algorithm=security_settings.JWT_ALGORITHM,
-        key=security_settings.JWT_SECRET,
-    )
-
-
-def decode_access_token(token: str) -> dict | None:
-    try:
-        return jwt.decode(
-            jwt=token,
-            key=security_settings.JWT_SECRET,
-            algorithms=[security_settings.JWT_ALGORITHM],
-        )
-    except jwt.PyJWTError:
-        return None
+# Otras utilidades generales pueden ir aquí
+def generate_random_string(length: int = 10) -> str:
+    """Genera una cadena aleatoria"""
+    import random
+    import string
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
