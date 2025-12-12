@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from fastapi.security import OAuth2PasswordBearer
 import os
 from typing import Optional
+import uuid
 
 # Configuración
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
@@ -14,7 +15,6 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Esquema OAuth2
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/sellers/token")
 
 # Contexto para hashing de contraseñas
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -39,7 +39,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return password_context.verify(plain_password, hashed_password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Crea un token JWT"""
+    """Crea un token JWT con JTI único para posible invalidación"""
     to_encode = data.copy()
     
     if expires_delta:
@@ -47,10 +47,15 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    to_encode.update({"exp": expire})
+    # Añadir JTI (JWT ID) único para poder invalidar tokens individualmente
+    to_encode.update({
+        "exp": expire,
+        "jti": str(uuid.uuid4()),  # Identificador único del token
+        "type": "access"
+    })
+    
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
-
 def verify_token(token: str) -> Optional[dict]:
     """Verifica y decodifica un token JWT"""
     try:

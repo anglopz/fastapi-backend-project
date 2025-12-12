@@ -45,3 +45,15 @@ async def delete_cache(key: str):
     """Eliminar de cache"""
     client = await get_redis()
     await client.delete(key)
+
+# Funciones para blacklist de tokens (logout system)
+async def add_to_blacklist(jti: str, expires_in: int = 86400) -> None:
+    """Añade un JTI a la blacklist para invalidar token (logout)"""
+    redis_client = await get_redis()
+    await redis_client.setex(f"token:blacklist:{jti}", expires_in, "1")
+
+async def is_blacklisted(jti: str) -> bool:
+    """Verifica si un JTI está en la blacklist"""
+    redis_client = await get_redis()
+    result = await redis_client.get(f"token:blacklist:{jti}")
+    return result is not None
