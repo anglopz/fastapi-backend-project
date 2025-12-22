@@ -26,4 +26,6 @@ class ShipmentCreate(BaseShipment):
 
 class ShipmentUpdate(BaseModel):
     status: ShipmentStatus | None = Field(default=None)
+    location: int | None = Field(default=None, description="Location zipcode where event occurred")
+    description: str | None = Field(default=None, description="Event description")
     estimated_delivery: datetime | None = Field(default=None)

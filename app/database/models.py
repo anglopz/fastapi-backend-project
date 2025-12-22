@@ -17,6 +17,7 @@ class ShipmentStatus(str, Enum):
     in_transit = "in_transit"
     out_for_delivery = "out_for_delivery"
     delivered = "delivered"
+    cancelled = "cancelled"
 
 
 class User(SQLModel):
@@ -92,6 +93,35 @@ class DeliveryPartner(User, table=True):
         """Calculate remaining handling capacity"""
         return self.max_handling_capacity - len(self.active_shipments)
 
+
+class ShipmentEvent(SQLModel, table=True):
+    """Shipment event model for tracking shipment status changes"""
+    __tablename__ = "shipment_event"
+
+    id: UUID = Field(
+        sa_column=Column(
+            postgresql.UUID,
+            default=uuid4,
+            primary_key=True,
+        )
+    )
+    created_at: datetime = Field(
+        sa_column=Column(
+            postgresql.TIMESTAMP,
+            default=datetime.now,
+        )
+    )
+
+    location: int = Field(description="Location zipcode where event occurred")
+    status: ShipmentStatus
+    description: str | None = Field(default=None, description="Event description")
+
+    shipment_id: UUID = Field(foreign_key="shipment.id")
+    shipment: Shipment = Relationship(
+        back_populates="events",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
 class Shipment(SQLModel, table=True):
     """Shipment model"""
     __tablename__ = "shipment"
@@ -129,3 +159,15 @@ class Shipment(SQLModel, table=True):
         back_populates="shipments",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+
+    events: list["ShipmentEvent"] = Relationship(
+        back_populates="shipment",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
+    @property
+    def timeline(self) -> list["ShipmentEvent"]:
+        """Return events in reverse chronological order (newest first)"""
+        if not self.events:
+            return []
+        return sorted(self.events, key=lambda e: e.created_at, reverse=True)

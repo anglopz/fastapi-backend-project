@@ -2,11 +2,16 @@
 General utilities for the application
 """
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from uuid import uuid4
 
 import jwt
 
 from app.config import security_settings
+
+# Template directory for email templates
+APP_DIR = Path(__file__).resolve().parent
+TEMPLATE_DIR = APP_DIR / "templates"
 
 # Reexportar funciones de core.security para compatibilidad
 from app.core.security import (

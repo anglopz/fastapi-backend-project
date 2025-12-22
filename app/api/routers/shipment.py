@@ -1,12 +1,14 @@
 """
 Shipment router
 """
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 
 from ..dependencies import DeliveryPartnerDep, SellerDep, ShipmentServiceDep
 from ..schemas.shipment import ShipmentCreate, ShipmentRead, ShipmentUpdate
+from app.database.models import ShipmentEvent
 
 
 router = APIRouter(prefix="/shipment", tags=["Shipment"])
@@ -34,8 +36,12 @@ async def submit_shipment(
     seller: SellerDep,
     shipment: ShipmentCreate,
     service: ShipmentServiceDep,
+    tasks: BackgroundTasks,
 ):
     """Create a new shipment (authenticated seller required)"""
+    # Inject BackgroundTasks into service for email sending
+    service.tasks = tasks
+    service.event_service.tasks = tasks
     return await service.add(shipment, seller)
 
 
@@ -46,6 +52,7 @@ async def update_shipment(
     shipment_update: ShipmentUpdate,
     partner: DeliveryPartnerDep,
     service: ShipmentServiceDep,
+    tasks: BackgroundTasks,
 ):
     """Update a shipment (only the assigned delivery partner can update)"""
     # Update data with given fields
@@ -67,12 +74,48 @@ async def update_shipment(
             detail="Not authorized",
         )
 
-    # Update shipment fields
-    for key, value in update.items():
-        if hasattr(shipment, key):
-            setattr(shipment, key, value)
+    # Inject BackgroundTasks into service for email sending
+    service.tasks = tasks
+    service.event_service.tasks = tasks
     
-    return await service.update(shipment)
+    # Update shipment with event creation
+    return await service.update(shipment, shipment_update)
+
+
+### Get shipment timeline
+@router.get("/timeline", response_model=list[ShipmentEvent])
+async def get_shipment_timeline(
+    id: UUID,
+    service: ShipmentServiceDep,
+):
+    """Get timeline of events for a shipment"""
+    shipment = await service.get(id)
+    
+    if shipment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Shipment not found",
+        )
+    
+    # Refresh to load events
+    await service.session.refresh(shipment, ["events"])
+    return shipment.timeline
+
+
+### Cancel a shipment
+@router.post("/cancel", response_model=ShipmentRead)
+async def cancel_shipment(
+    id: UUID,
+    seller: SellerDep,
+    service: ShipmentServiceDep,
+    tasks: BackgroundTasks,
+):
+    """Cancel a shipment (only the seller who created it can cancel)"""
+    # Inject BackgroundTasks into service for email sending
+    service.tasks = tasks
+    service.event_service.tasks = tasks
+    
+    return await service.cancel(id, seller)
 
 
 ### Delete a shipment by id

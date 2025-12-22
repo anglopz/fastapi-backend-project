@@ -134,6 +134,8 @@ async def test_delivery_partner_update(client: AsyncClient, test_session: AsyncS
 @pytest.mark.asyncio
 async def test_delivery_partner_logout(client: AsyncClient, test_session: AsyncSession):
     """Test delivery partner logout"""
+    import asyncio
+    
     # Create and login partner
     partner_data = {
         "name": "Logout Test Partner",
@@ -164,4 +166,7 @@ async def test_delivery_partner_logout(client: AsyncClient, test_session: AsyncS
     data = response.json()
     assert "detail" in data
     assert "logged out" in data["detail"].lower()
+    
+    # Give Redis time to close connections before event loop closes
+    await asyncio.sleep(0.1)
 

@@ -4,14 +4,16 @@ API dependencies for dependency injection
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.mail import MailClient, get_mail_client
 from app.core.security import oauth2_scheme_seller, oauth2_scheme_partner
 from app.database.models import DeliveryPartner, Seller
 from app.database.redis import is_jti_blacklisted
 from app.database.session import get_session
 from app.services.delivery_partner import DeliveryPartnerService
+from app.services.event import ShipmentEventService
 from app.services.seller import SellerService
 from app.services.shipment import ShipmentService
 from app.utils import decode_access_token
@@ -92,19 +94,48 @@ async def get_current_partner(
     return partner
 
 
+# Mail client dep
+def get_mail_service() -> MailClient:
+    """Get mail client instance (singleton)"""
+    return get_mail_client()
+
+
+# Event service dep
+def get_event_service(
+    session: SessionDep,
+    mail_client: Annotated[MailClient, Depends(get_mail_service)],
+):
+    """Create event service with mail dependencies"""
+    return ShipmentEventService(
+        session,
+        mail_client=mail_client,
+    )
+
+
 # Shipment service dep
-def get_shipment_service(session: SessionDep):
-    """Create shipment service with delivery partner service dependency"""
+def get_shipment_service(
+    session: SessionDep,
+    mail_client: Annotated[MailClient, Depends(get_mail_service)],
+):
+    """Create shipment service with delivery partner service, event service, and mail dependencies"""
     return ShipmentService(
         session,
         DeliveryPartnerService(session),
+        ShipmentEventService(session, mail_client=mail_client),
+        mail_client=mail_client,
     )
 
 
 # Seller service dep
-def get_seller_service(session: SessionDep):
-    """Create seller service"""
-    return SellerService(session)
+def get_seller_service(
+    session: SessionDep,
+    mail_client: Annotated[MailClient, Depends(get_mail_service)],
+):
+    """Create seller service with mail dependencies"""
+    return SellerService(
+        session,
+        mail_client=mail_client,
+    )
 
 
 # Delivery partner service dep

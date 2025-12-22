@@ -40,9 +40,26 @@ class DatabaseSettings(BaseSettings):
         )
 
 
+class MailSettings(BaseSettings):
+    """Mail/Email notification settings"""
+    MAIL_USERNAME: str = ""
+    MAIL_PASSWORD: str = ""
+    MAIL_FROM: str = "noreply@example.com"
+    MAIL_PORT: int = 587
+    MAIL_SERVER: str = "smtp.gmail.com"
+    MAIL_FROM_NAME: str = "FastShip"
+    MAIL_STARTTLS: bool = True
+    MAIL_SSL_TLS: bool = False
+    USE_CREDENTIALS: bool = True
+    VALIDATE_CERTS: bool = True
+
+    model_config = _base_config
+
+
 # New naming convention (db_settings, security_settings)
 db_settings = DatabaseSettings()
 security_settings = SecuritySettings()
+mail_settings = MailSettings()
 
 # Migration wrapper for backward compatibility
 # TODO: Remove this after all code is migrated to use db_settings

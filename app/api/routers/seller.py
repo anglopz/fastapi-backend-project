@@ -3,7 +3,7 @@ Seller router
 """
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.database.redis import add_jti_to_blacklist
@@ -23,8 +23,11 @@ router = APIRouter(prefix="/seller", tags=["Seller"])
 async def register_seller(
     seller: SellerCreate,
     service: SellerServiceDep,
+    tasks: BackgroundTasks,
 ):
     """Register a new seller"""
+    # Inject BackgroundTasks into service for email sending
+    service.tasks = tasks
     return await service.add(seller)
 
 
