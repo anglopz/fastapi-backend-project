@@ -1,14 +1,42 @@
+# Development directories (never track)
+_reports/
+_backups/
+_section_integration/
 .venv/
-__pycache__/
-*.pyc
-.env
-
-# Scripts de desarrollo local
-check_deps.py
-
-# IDE configuration
-.vscode/
-
-# Python virtual environment
 venv/
-.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database and logs
+*.sql
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment files (except example)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Python
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# Docker
+data/

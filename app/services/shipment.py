@@ -1,58 +1,54 @@
+"""
+Shipment service - refactored to use BaseService and partner assignment
+"""
 from datetime import datetime, timedelta
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
-from api.schemas.shipment import ShipmentCreate
-from database.models import Shipment, ShipmentStatus
+from app.api.schemas.shipment import ShipmentCreate
+from app.database.models import Seller, Shipment, ShipmentStatus
+
+from .base import BaseService
+from .delivery_partner import DeliveryPartnerService
 
 
-class ShipmentService:
-    def __init__(self, session: AsyncSession):
-        self.session = session
+class ShipmentService(BaseService):
+    """Service for shipment operations"""
+    
+    def __init__(
+        self,
+        session: AsyncSession,
+        partner_service: DeliveryPartnerService,
+    ):
+        super().__init__(Shipment, session)
+        self.partner_service = partner_service
 
-    async def get_all(self):
-        """Get all shipments"""
-        result = await self.session.execute(select(Shipment))
-        return result.scalars().all()
+    async def get(self, id: UUID) -> Shipment | None:
+        """Get a shipment by ID"""
+        return await self._get(id)
 
-    async def get_by_id(self, id: int) -> Shipment | None:
-        """Get a shipment by id"""
-        return await self.session.get(Shipment, id)
-
-    async def create(self, shipment_create: ShipmentCreate) -> Shipment:
-        """Create a new shipment"""
+    async def add(self, shipment_create: ShipmentCreate, seller: Seller) -> Shipment:
+        """Create a new shipment and assign a delivery partner"""
         new_shipment = Shipment(
-            content=shipment_create.content,
-            weight_kg=shipment_create.weight,  # Note: schema uses 'weight' but model uses 'weight_kg'
-            seller_id=shipment_create.seller_id,  # Fixed: schema now uses 'seller_id'
+            **shipment_create.model_dump(),
             status=ShipmentStatus.placed,
             estimated_delivery=datetime.now() + timedelta(days=3),
+            seller_id=seller.id,
         )
-        self.session.add(new_shipment)
-        await self.session.commit()
-        await self.session.refresh(new_shipment)
-        return new_shipment
+        # Assign delivery partner to the shipment
+        partner = await self.partner_service.assign_shipment(new_shipment)
+        # Add the delivery partner foreign key
+        new_shipment.delivery_partner_id = partner.id
 
-    async def update(self, id: int, shipment_update: dict) -> Shipment | None:
+        return await self._add(new_shipment)
+
+    async def update(self, shipment: Shipment) -> Shipment:
         """Update an existing shipment"""
-        shipment = await self.get_by_id(id)
-        if shipment is None:
-            return None
+        return await self._update(shipment)
 
-        for key, value in shipment_update.items():
-            if hasattr(shipment, key):
-                setattr(shipment, key, value)
-
-        self.session.add(shipment)
-        await self.session.commit()
-        await self.session.refresh(shipment)
-        return shipment
-
-    async def delete(self, id: int) -> bool:
+    async def delete(self, id: UUID) -> None:
         """Delete a shipment"""
-        shipment = await self.get_by_id(id)
+        shipment = await self.get(id)
         if shipment:
-            await self.session.delete(shipment)
-            await self.session.commit()
-            return True
-        return False
+            await self._delete(shipment)

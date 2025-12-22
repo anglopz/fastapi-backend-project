@@ -1,0 +1,140 @@
+"""
+Tests for seller endpoints, including login flow
+"""
+import pytest
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
+
+from app.database.models import Seller
+
+
+@pytest.mark.asyncio
+async def test_seller_signup(client: AsyncClient, test_session: AsyncSession):
+    """Test seller signup endpoint"""
+    seller_data = {
+        "name": "Test Seller",
+        "email": "test@example.com",
+        "password": "testpassword123"
+    }
+    
+    response = await client.post("/seller/signup", json=seller_data)
+    
+    assert response.status_code == 200  # Changed from 201
+    data = response.json()
+    
+    assert data["name"] == seller_data["name"]
+    assert data["email"] == seller_data["email"]
+    assert "id" in data
+    # Verify ID is a valid UUID
+    try:
+        UUID(data["id"])
+    except (ValueError, TypeError):
+        pytest.fail(f"ID is not a valid UUID: {data['id']}")
+    assert "password" not in data  # Password should not be in response
+
+
+@pytest.mark.asyncio
+async def test_seller_signup_duplicate_email(client: AsyncClient, test_session: AsyncSession):
+    """Test that duplicate email signup fails"""
+    seller_data = {
+        "name": "Test Seller",
+        "email": "duplicate@example.com",
+        "password": "testpassword123"
+    }
+    
+    # Create first seller
+    response1 = await client.post("/seller/signup", json=seller_data)
+    assert response1.status_code == 200
+    
+    # Try to create duplicate
+    response2 = await client.post("/seller/signup", json=seller_data)
+    # Note: The new service might return different error codes
+    assert response2.status_code in [400, 409, 422]
+    error_data = response2.json()
+    # Check for error message in either "detail" or "message" field
+    error_msg = (error_data.get("detail") or error_data.get("message") or "").lower()
+    assert "already exists" in error_msg or "duplicate" in error_msg
+
+
+@pytest.mark.asyncio
+async def test_seller_login_success(client: AsyncClient, test_session: AsyncSession):
+    """Test successful seller login flow"""
+    # First, create a seller
+    seller_data = {
+        "name": "Login Test Seller",
+        "email": "login@example.com",
+        "password": "loginpassword123"
+    }
+    
+    signup_response = await client.post("/seller/signup", json=seller_data)
+    assert signup_response.status_code == 200
+    
+    # Now test login
+    login_data = {
+        "username": seller_data["email"],  # OAuth2 uses "username" field
+        "password": seller_data["password"]
+    }
+    
+    response = await client.post(
+        "/seller/token",
+        data=login_data,  # Use data= for form data (OAuth2PasswordRequestForm)
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert "access_token" in data
+    assert "type" in data or "token_type" in data  # New API uses "type"
+    assert len(data["access_token"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_seller_login_invalid_credentials(client: AsyncClient, test_session: AsyncSession):
+    """Test login with invalid credentials"""
+    login_data = {
+        "username": "nonexistent@example.com",
+        "password": "wrongpassword"
+    }
+    
+    response = await client.post(
+        "/seller/token",
+        data=login_data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    
+    assert response.status_code in [401, 404]  # New service returns 404 for incorrect credentials
+    error_data = response.json()
+    # Check for error message in either "detail" or "message" field
+    error_msg = (error_data.get("detail") or error_data.get("message") or "").lower()
+    assert "invalid" in error_msg or "unauthorized" in error_msg or "incorrect" in error_msg
+
+
+@pytest.mark.asyncio
+async def test_seller_login_wrong_password(client: AsyncClient, test_session: AsyncSession):
+    """Test login with correct email but wrong password"""
+    # Create seller first
+    seller_data = {
+        "name": "Password Test Seller",
+        "email": "password@example.com",
+        "password": "correctpassword123"
+    }
+    
+    signup_response = await client.post("/seller/signup", json=seller_data)
+    assert signup_response.status_code == 200
+    
+    # Try login with wrong password
+    login_data = {
+        "username": seller_data["email"],
+        "password": "wrongpassword"
+    }
+    
+    response = await client.post(
+        "/seller/token",
+        data=login_data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    
+    assert response.status_code in [401, 404]  # New service returns 404
+

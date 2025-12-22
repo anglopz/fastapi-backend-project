@@ -1,16 +1,17 @@
 FROM python:3.11-slim
 
-WORKDIR /app
+# Directorio de trabajo dentro del contenedor
+WORKDIR /code
 
-# Install dependencies
+# Instalar dependencias
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application
-COPY ./app /app
+# Copiar todo el proyecto (incluyendo el paquete app)
+COPY . /code
 
-# Configure PYTHONPATH
-ENV PYTHONPATH=/app
+# Asegurar que el paquete raíz `app` sea importable (para `app.main`)
+ENV PYTHONPATH=/code
 
-# Start the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Arrancar la aplicación FastAPI
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

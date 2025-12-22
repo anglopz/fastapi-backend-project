@@ -1,3 +1,7 @@
+"""
+Seller schemas
+"""
+from uuid import UUID
 from pydantic import BaseModel, EmailStr
 
 
@@ -7,7 +11,7 @@ class BaseSeller(BaseModel):
 
 
 class SellerRead(BaseSeller):
-    id: int  # Added id field
+    id: UUID
 
 
 class SellerCreate(BaseSeller):

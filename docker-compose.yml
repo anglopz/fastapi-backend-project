@@ -3,6 +3,7 @@ version: '3.8'
 services:
   api:
     build: .
+    working_dir: /code
     ports:
       - "8000:8000"
     environment:
@@ -12,7 +13,7 @@ services:
       - db
       - redis
     volumes:
-      - ./app:/app
+      - .:/code
   
   db:
     image: postgres:15-alpine

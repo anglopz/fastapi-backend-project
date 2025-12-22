@@ -1,4 +1,4 @@
-from database.redis import get_cache, set_cache, delete_cache  # type: ignore
+from app.database.redis import get_cache, set_cache, delete_cache  # type: ignore
 from typing import Optional
 import json
 

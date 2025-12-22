@@ -1,29 +1,129 @@
-from typing import Annotated, Optional
+"""
+API dependencies for dependency injection
+"""
+from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.security import verify_token
-from database.redis import is_blacklisted
-from database.session import get_session
-from services.seller import SellerService
-from services.shipment import ShipmentService
+from app.core.security import oauth2_scheme_seller, oauth2_scheme_partner
+from app.database.models import DeliveryPartner, Seller
+from app.database.redis import is_jti_blacklisted
+from app.database.session import get_session
+from app.services.delivery_partner import DeliveryPartnerService
+from app.services.seller import SellerService
+from app.services.shipment import ShipmentService
+from app.utils import decode_access_token
 
 
 # Asynchronous database session dep annotation
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
+# Access token data dep
+async def _get_access_token(token: str) -> dict:
+    """Validate and decode access token"""
+    data = decode_access_token(token)
+
+    # Validate the token
+    if data is None or await is_jti_blacklisted(data["jti"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired access token",
+        )
+
+    return data
+
+
+# Seller access token data
+async def get_seller_access_token(
+    token: Annotated[str, Depends(oauth2_scheme_seller)],
+) -> dict:
+    """Get and validate seller access token"""
+    return await _get_access_token(token)
+
+
+# Delivery partner access token data
+async def get_partner_access_token(
+    token: Annotated[str, Depends(oauth2_scheme_partner)],
+) -> dict:
+    """Get and validate delivery partner access token"""
+    return await _get_access_token(token)
+
+
+# Logged In Seller
+async def get_current_seller(
+    token_data: Annotated[dict, Depends(get_seller_access_token)],
+    session: SessionDep,
+):
+    """Get the currently authenticated seller"""
+    seller = await session.get(
+        Seller,
+        UUID(token_data["user"]["id"]),
+    )
+
+    if seller is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authorized",
+        )
+
+    return seller
+
+
+# Logged In Delivery partner
+async def get_current_partner(
+    token_data: Annotated[dict, Depends(get_partner_access_token)],
+    session: SessionDep,
+):
+    """Get the currently authenticated delivery partner"""
+    partner = await session.get(
+        DeliveryPartner,
+        UUID(token_data["user"]["id"]),
+    )
+
+    if partner is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authorized",
+        )
+
+    return partner
+
+
 # Shipment service dep
 def get_shipment_service(session: SessionDep):
-    return ShipmentService(session)
+    """Create shipment service with delivery partner service dependency"""
+    return ShipmentService(
+        session,
+        DeliveryPartnerService(session),
+    )
 
 
 # Seller service dep
 def get_seller_service(session: SessionDep):
+    """Create seller service"""
     return SellerService(session)
 
+
+# Delivery partner service dep
+def get_delivery_partner_service(session: SessionDep):
+    """Create delivery partner service"""
+    return DeliveryPartnerService(session)
+
+
+# Seller dep annotation
+SellerDep = Annotated[
+    Seller,
+    Depends(get_current_seller),
+]
+
+# Delivery partner dep annotation
+DeliveryPartnerDep = Annotated[
+    DeliveryPartner,
+    Depends(get_current_partner),
+]
 
 # Shipment service dep annotation
 ShipmentServiceDep = Annotated[
@@ -37,30 +137,13 @@ SellerServiceDep = Annotated[
     Depends(get_seller_service),
 ]
 
-# -------------------------------------------------------------------
-# Dependencias de autenticación con verificación de blacklist
-# -------------------------------------------------------------------
+# Delivery partner service dep annotation
+DeliveryPartnerServiceDep = Annotated[
+    DeliveryPartnerService,
+    Depends(get_delivery_partner_service),
+]
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="sellers/token")
-
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> Optional[dict]:
-    """Obtiene el usuario actual verificando token y blacklist"""
-    # Verificar token
-    payload = verify_token(token)
-    if payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Verificar si el token está en blacklist
-    jti = payload.get("jti")
-    if jti and await is_blacklisted(jti):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has been revoked",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    return payload
+# Backward compatibility - keep old get_current_user for existing code
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme_seller)]) -> dict:
+    """Backward compatibility alias for get_seller_access_token"""
+    return await get_seller_access_token(token)

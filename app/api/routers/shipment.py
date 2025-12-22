@@ -1,70 +1,85 @@
+"""
+Shipment router
+"""
+from uuid import UUID
+
 from fastapi import APIRouter, HTTPException, status
-from typing import List
 
-from api.dependencies import SellerServiceDep, ShipmentServiceDep
-from api.schemas.shipment import ShipmentCreate, ShipmentRead, ShipmentUpdate
+from ..dependencies import DeliveryPartnerDep, SellerDep, ShipmentServiceDep
+from ..schemas.shipment import ShipmentCreate, ShipmentRead, ShipmentUpdate
 
-router = APIRouter(prefix="/shipments", tags=["shipments"])
 
-@router.get("/", response_model=List[ShipmentRead])
-async def get_shipments(service: ShipmentServiceDep):
-    """Get all shipments."""
-    return await service.get_all()
+router = APIRouter(prefix="/shipment", tags=["Shipment"])
 
-@router.get("/{id}", response_model=ShipmentRead)
-async def get_shipment(id: int, service: ShipmentServiceDep):
-    """Get a specific shipment by ID."""
-    shipment = await service.get_by_id(id)
-    if not shipment:
+
+### Read a shipment by id
+@router.get("/", response_model=ShipmentRead)
+async def get_shipment(id: UUID, service: ShipmentServiceDep):
+    """Get a shipment by ID"""
+    # Check for shipment with given id
+    shipment = await service.get(id)
+
+    if shipment is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Shipment not found",
+            detail="Given id doesn't exist!",
         )
+
     return shipment
 
-@router.post("/", response_model=ShipmentRead, status_code=201)
-async def create_shipment(
+
+### Create a new shipment
+@router.post("/", response_model=ShipmentRead)
+async def submit_shipment(
+    seller: SellerDep,
     shipment: ShipmentCreate,
     service: ShipmentServiceDep,
-    seller_service: SellerServiceDep,
 ):
-    """Create a new shipment."""
-    seller = await seller_service.get_by_id(shipment.seller_id)
-    if not seller:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Seller not found"
-        )
-    return await service.create(shipment)
+    """Create a new shipment (authenticated seller required)"""
+    return await service.add(shipment, seller)
 
-@router.patch("/{id}", response_model=ShipmentRead)
+
+### Update fields of a shipment
+@router.patch("/", response_model=ShipmentRead)
 async def update_shipment(
-    id: int,
+    id: UUID,
     shipment_update: ShipmentUpdate,
+    partner: DeliveryPartnerDep,
     service: ShipmentServiceDep,
 ):
-    """Update an existing shipment."""
-    update_data = shipment_update.model_dump(exclude_none=True)
-    if not update_data:
+    """Update a shipment (only the assigned delivery partner can update)"""
+    # Update data with given fields
+    update = shipment_update.model_dump(exclude_none=True)
+
+    if not update:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No data provided to update",
         )
-    shipment = await service.update(id, update_data)
-    if shipment is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Shipment not found",
-        )
-    return shipment
+    
+    # Validate logged in partner with assigned partner
+    # on the shipment with given id
+    shipment = await service.get(id)
 
-@router.delete("/{id}", status_code=204)
-async def delete_shipment(id: int, service: ShipmentServiceDep):
-    """Delete a shipment."""
-    success = await service.delete(id)
-    if not success:
+    if shipment.delivery_partner_id != partner.id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Shipment not found",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authorized",
         )
-    return None
+
+    # Update shipment fields
+    for key, value in update.items():
+        if hasattr(shipment, key):
+            setattr(shipment, key, value)
+    
+    return await service.update(shipment)
+
+
+### Delete a shipment by id
+@router.delete("/")
+async def delete_shipment(id: UUID, service: ShipmentServiceDep) -> dict[str, str]:
+    """Delete a shipment by ID"""
+    # Remove from database
+    await service.delete(id)
+
+    return {"detail": f"Shipment with id #{id} is deleted!"}

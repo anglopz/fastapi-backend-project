@@ -1,59 +1,88 @@
-import redis.asyncio as redis  # type: ignore
-import os
-from typing import Optional
+"""
+Redis client and token blacklist management
+"""
+from redis.asyncio import Redis
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-
-_redis_client = None
+from app.config import db_settings
 
 
-async def get_redis() -> redis.Redis:
-    """Obtener cliente Redis"""
-    global _redis_client
-    if _redis_client is None:
-        _redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+# Token blacklist Redis client (separate from cache)
+_token_blacklist = Redis(
+    host=db_settings.REDIS_HOST,
+    port=int(db_settings.REDIS_PORT),
+    db=0,
+    decode_responses=True,
+)
+
+# Cache Redis client (for backward compatibility)
+_cache_client = None
+
+
+async def get_redis():
+    """Get Redis client for cache (backward compatibility)"""
+    global _cache_client
+    if _cache_client is None:
+        from redis.asyncio import Redis as AsyncRedis
+        _cache_client = AsyncRedis(
+            host=db_settings.REDIS_HOST,
+            port=int(db_settings.REDIS_PORT),
+            db=1,  # Use different DB for cache
+            decode_responses=True,
+        )
         try:
-            await _redis_client.ping()
-            print("✅ Conectado a Redis")
+            await _cache_client.ping()
+            print("✅ Connected to Redis (cache)")
         except Exception as e:
-            print(f"❌ Error conectando a Redis: {e}")
+            print(f"❌ Error connecting to Redis: {e}")
             raise
-    return _redis_client
+    return _cache_client
 
 
 async def close_redis():
-    """Cerrar conexión Redis"""
-    global _redis_client
-    if _redis_client:
-        await _redis_client.close()
-        _redis_client = None
+    """Close Redis connections"""
+    global _cache_client
+    if _cache_client:
+        await _cache_client.close()
+        _cache_client = None
+    await _token_blacklist.close()
 
 
+# Cache functions (backward compatibility)
 async def set_cache(key: str, value: str, expire_seconds: int = 3600):
-    """Guardar en cache"""
+    """Save to cache"""
     client = await get_redis()
     await client.setex(key, expire_seconds, value)
 
 
-async def get_cache(key: str) -> Optional[str]:
-    """Obtener de cache"""
+async def get_cache(key: str) -> str | None:
+    """Get from cache"""
     client = await get_redis()
     return await client.get(key)
 
 
 async def delete_cache(key: str):
-    """Eliminar de cache"""
+    """Delete from cache"""
     client = await get_redis()
     await client.delete(key)
 
-# Funciones para blacklist de tokens (logout system)
+
+# Token blacklist functions (new API from Section 16)
+async def add_jti_to_blacklist(jti: str) -> None:
+    """Add a JTI to the blacklist to invalidate token (logout)"""
+    await _token_blacklist.set(jti, "blacklisted")
+
+
+async def is_jti_blacklisted(jti: str) -> bool:
+    """Check if a JTI is in the blacklist"""
+    return await _token_blacklist.exists(jti) > 0
+
+
+# Backward compatibility aliases (deprecated)
 async def add_to_blacklist(jti: str, expires_in: int = 86400) -> None:
-    """Añade un JTI a la blacklist para invalidar token (logout)"""
-    redis_client = await get_redis()
-    await redis_client.setex(f"token:blacklist:{jti}", expires_in, "1")
+    """Deprecated: Use add_jti_to_blacklist instead"""
+    await add_jti_to_blacklist(jti)
+
 
 async def is_blacklisted(jti: str) -> bool:
-    """Verifica si un JTI está en la blacklist"""
-    redis_client = await get_redis()
-    result = await redis_client.get(f"token:blacklist:{jti}")
-    return result is not None
+    """Deprecated: Use is_jti_blacklisted instead"""
+    return await is_jti_blacklisted(jti)

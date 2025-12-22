@@ -3,9 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from scalar_fastapi import get_scalar_api_reference
 
-from api.api_router import master_router
-from database.session import create_db_tables
-from database.redis import get_redis, close_redis  # <-- NUEVO
+from app.api.api_router import master_router
+from app.core.exception_handlers import setup_exception_handlers
+from app.database.redis import close_redis, get_redis
+from app.database.session import create_db_tables
 
 
 @asynccontextmanager
@@ -48,12 +49,10 @@ def get_scalar_docs():
     )
 
 
-### Health Check Endpoint (NUEVO - para monitoreo)
+### Health Check Endpoint
 @app.get("/health")
 async def health_check():
     """Health check endpoint with Redis status"""
-    from database.redis import get_redis
-
     redis_status = "disconnected"
     try:
         redis_client = await get_redis()
@@ -65,11 +64,11 @@ async def health_check():
     return {"status": "healthy", "redis": redis_status, "service": "FastAPI Backend"}
 
 
-### Test Redis Endpoint (NUEVO - para desarrollo)
+### Test Redis Endpoint
 @app.get("/test-redis")
 async def test_redis():
     """Test Redis connection and basic operations"""
-    from database.redis import get_redis, set_cache, get_cache
+    from app.database.redis import get_cache, set_cache
 
     try:
         # Test básico
@@ -95,21 +94,12 @@ async def test_redis():
     except Exception as e:
         return {"success": False, "error": str(e), "message": "Redis test failed"}
 
+
 # Setup exception handlers
-from core.exception_handlers import setup_exception_handlers
 setup_exception_handlers(app)
 
-# Include all routers
-app.include_router(master_router)
-
-# Add scalar API reference
-@app.get("/reference", include_in_schema=False)
-async def scalar_api_reference():
-    return get_scalar_api_reference(
-        title="FastAPI Scalar API Reference",
-        spec_url="/openapi.json"
-    )
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
