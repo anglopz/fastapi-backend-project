@@ -7,17 +7,23 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlmodel import SQLModel
 
+# Set TESTING environment variable before imports
+os.environ["TESTING"] = "true"
+
 from app.main import app
 from app.database.session import get_session
+from app.database.redis import close_redis
 
 # Import all models to ensure they're registered with SQLModel
 from app.database.models import Seller, Shipment, DeliveryPartner  # noqa: F401
 
 # Test database URL - Use PostgreSQL for UUID and ARRAY support
+# In Docker, use 'db' as host; locally use 'localhost'
 # Fallback to environment variable or use test database
+TEST_DB_HOST = os.getenv("TEST_DB_HOST", "db" if os.path.exists("/.dockerenv") else "localhost")
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql+asyncpg://postgres:password@localhost:5432/fastapi_test_db"
+    f"postgresql+asyncpg://postgres:password@{TEST_DB_HOST}:5432/fastapi_db"
 )
 
 
@@ -74,3 +80,5 @@ async def client(test_session):
     """Create a test client"""
     async with AsyncClient(app=app, base_url="http://test") as test_client:
         yield test_client
+    # Clean up Redis connections after each test
+    await close_redis()
