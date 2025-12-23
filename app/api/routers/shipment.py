@@ -4,14 +4,19 @@ Shipment router
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
+from fastapi.templating import Jinja2Templates
 
+from app.utils import TEMPLATE_DIR
 from ..dependencies import DeliveryPartnerDep, SellerDep, ShipmentServiceDep
 from ..schemas.shipment import ShipmentCreate, ShipmentRead, ShipmentUpdate
 from app.database.models import ShipmentEvent
 
 
 router = APIRouter(prefix="/shipment", tags=["Shipment"])
+
+# Jinja2 templates for HTML responses
+templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 
 ### Read a shipment by id
@@ -116,6 +121,48 @@ async def cancel_shipment(
     service.event_service.tasks = tasks
     
     return await service.cancel(id, seller)
+
+
+### Track shipment (HTML response)
+@router.get("/track", include_in_schema=False)
+async def get_tracking(
+    request: Request,
+    id: UUID,
+    service: ShipmentServiceDep,
+):
+    """Get shipment tracking page (HTML response)"""
+    # Check for shipment with given id
+    shipment = await service.get(id)
+    
+    if shipment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Shipment not found",
+        )
+    
+    # Refresh to load relationships
+    await service.session.refresh(shipment, ["delivery_partner", "events"])
+    
+    # Prepare context for template
+    # Pass shipment object directly so template can access id.hex
+    context = {
+        "request": request,
+        "id": shipment.id,  # UUID object for .hex access
+        "content": shipment.content,
+        "weight": shipment.weight,
+        "destination": shipment.destination,
+        "status": shipment.status,
+        "estimated_delivery": shipment.estimated_delivery,
+        "created_at": shipment.created_at,
+        "partner": shipment.delivery_partner.name,
+        "timeline": shipment.timeline,  # Already reversed (newest first)
+    }
+    
+    return templates.TemplateResponse(
+        request=request,
+        name="track.html",
+        context=context,
+    )
 
 
 ### Delete a shipment by id
