@@ -117,7 +117,7 @@ class ShipmentEvent(SQLModel, table=True):
     description: str | None = Field(default=None, description="Event description")
 
     shipment_id: UUID = Field(foreign_key="shipment.id")
-    shipment: Shipment = Relationship(
+    shipment: "Shipment" = Relationship(
         back_populates="events",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
