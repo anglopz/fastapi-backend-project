@@ -4,9 +4,11 @@ Shipment router
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Request, status
 from fastapi.templating import Jinja2Templates
+from typing import Annotated
 
+from app.config import app_settings
 from app.utils import TEMPLATE_DIR
 from ..dependencies import DeliveryPartnerDep, SellerDep, ShipmentServiceDep
 from ..schemas.shipment import ShipmentCreate, ShipmentRead, ShipmentUpdate
@@ -69,22 +71,21 @@ async def update_shipment(
             detail="No data provided to update",
         )
     
-    # Validate logged in partner with assigned partner
-    # on the shipment with given id
+    # Get shipment for update
     shipment = await service.get(id)
-
-    if shipment.delivery_partner_id != partner.id:
+    
+    if shipment is None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authorized",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Shipment not found",
         )
 
     # Inject BackgroundTasks into service for email sending
     service.tasks = tasks
     service.event_service.tasks = tasks
     
-    # Update shipment with event creation
-    return await service.update(shipment, shipment_update)
+    # Update shipment with event creation (partner passed for authorization check)
+    return await service.update(shipment, shipment_update, partner=partner)
 
 
 ### Get shipment timeline
@@ -173,3 +174,32 @@ async def delete_shipment(id: UUID, service: ShipmentServiceDep) -> dict[str, st
     await service.delete(id)
 
     return {"detail": f"Shipment with id #{id} is deleted!"}
+
+
+### Submit a review for a shipment (HTML form)
+@router.get("/review", include_in_schema=False)
+async def get_review_form(
+    request: Request,
+    token: str,
+):
+    """Display review submission form"""
+    return templates.TemplateResponse(
+        request=request,
+        name="review.html",
+        context={
+            "review_url": f"http://{app_settings.APP_DOMAIN}/shipment/review?token={token}",
+        },
+    )
+
+
+### Submit a review for a shipment
+@router.post("/review", include_in_schema=False)
+async def submit_review(
+    token: str,
+    service: ShipmentServiceDep,
+    rating: Annotated[int, Form(ge=1, le=5)],
+    comment: Annotated[str | None, Form()] = None,
+):
+    """Submit a review for a shipment"""
+    await service.rate(token, rating, comment)
+    return {"detail": "Review submitted successfully"}
