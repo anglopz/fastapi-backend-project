@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.shipment import ShipmentCreate, ShipmentUpdate
 from app.core.mail import MailClient
-from app.database.models import Seller, Shipment, ShipmentStatus
+from app.database.models import DeliveryPartner, Review, Seller, Shipment, ShipmentStatus
+from app.database.redis import get_shipment_verification_code
+from app.utils import decode_url_safe_token
 
 from .base import BaseService
 from .delivery_partner import DeliveryPartnerService
@@ -69,12 +71,49 @@ class ShipmentService(BaseService):
         
         return shipment
 
-    async def update(self, shipment: Shipment, shipment_update: ShipmentUpdate) -> Shipment:
-        """Update an existing shipment and create event if status/location changed"""
+    async def update(
+        self, 
+        shipment: Shipment, 
+        shipment_update: ShipmentUpdate,
+        partner: Optional[DeliveryPartner] = None,
+    ) -> Shipment:
+        """
+        Update an existing shipment and create event if status/location changed
+        
+        Args:
+            shipment: The shipment to update
+            shipment_update: Update data
+            partner: Optional delivery partner (for authorization check)
+            
+        Returns:
+            Updated Shipment
+        """
+        # Phase 1: Partner authorization check (optional - only if partner provided)
+        if partner is not None:
+            if shipment.delivery_partner_id != partner.id:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Not authorized",
+                )
+        
+        # Phase 2: Verification code is now required for delivery
+        if shipment_update.status == ShipmentStatus.delivered:
+            if not shipment_update.verification_code:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Verification code is required to mark shipment as delivered",
+                )
+            stored_code = await get_shipment_verification_code(shipment.id)
+            if not stored_code or stored_code != shipment_update.verification_code:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired verification code",
+                )
+        
         old_status = shipment.status
         
-        # Update shipment fields
-        update_data = shipment_update.model_dump(exclude_none=True)
+        # Update shipment fields (exclude verification_code from update data)
+        update_data = shipment_update.model_dump(exclude_none=True, exclude=["verification_code"])
         
         # Update estimated_delivery if provided
         if shipment_update.estimated_delivery:
@@ -152,3 +191,55 @@ class ShipmentService(BaseService):
         shipment = await self.get(id)
         if shipment:
             await self._delete(shipment)
+
+    async def rate(self, token: str, rating: int, comment: str | None = None) -> None:
+        """
+        Submit a review for a shipment using a token.
+        
+        Args:
+            token: URL-safe token containing shipment ID
+            rating: Rating from 1 to 5
+            comment: Optional review comment
+            
+        Raises:
+            HTTPException: If token is invalid, shipment not found, or review already exists
+        """
+        # Decode token (use "review" salt to match generation)
+        token_data = decode_url_safe_token(
+            token,
+            salt="review",
+            expiry=timedelta(days=30),  # 30-day expiry for reviews
+        )
+        
+        if not token_data:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired review token",
+            )
+        
+        shipment = await self.get(UUID(token_data["id"]))
+        if not shipment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Shipment not found",
+            )
+        
+        # Refresh to load review relationship
+        await self.session.refresh(shipment, ["review"])
+        
+        # Check if review already exists
+        if shipment.review:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Review already submitted for this shipment",
+            )
+        
+        # Create review
+        new_review = Review(
+            rating=rating,
+            comment=comment if comment else None,
+            shipment_id=shipment.id,
+        )
+        
+        await self._add(new_review)
+        logger.info(f"Review submitted for shipment {shipment.id} with rating {rating}")

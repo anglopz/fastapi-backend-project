@@ -2,6 +2,7 @@
 Shipment Event Service - handles event creation and timeline management
 """
 import logging
+from random import randint
 from typing import Optional
 from uuid import UUID
 
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.mail import MailClient
 from app.database.models import Shipment, ShipmentEvent, ShipmentStatus
+from app.database.redis import add_shipment_verification_code
 from app.tasks import add_background_task
 
 from .base import BaseService
@@ -158,22 +160,25 @@ class ShipmentEventService(BaseService):
         status: ShipmentStatus,
     ):
         """
-        Send status notification email (background task)
+        Send status notification email and/or SMS (background task)
         
         Args:
             shipment: The shipment with loaded relationships
             status: The new status
         """
         try:
-            # Get client email if available (for Section 18 integration)
-            client_email = getattr(shipment, "client_contact_email", None)
+            # Phase 2: client_contact_email is now required, so it should always be present
+            client_email = shipment.client_contact_email
+            client_phone = getattr(shipment, "client_contact_phone", None)
+            
             if not client_email:
-                logger.debug(f"No client email for shipment {shipment.id}, skipping notification")
+                logger.warning(f"Shipment {shipment.id} missing client_contact_email (required field), skipping notification")
                 return
             
             subject: str
             template_name: str
             context: dict = {}
+            verification_code: Optional[int] = None
             
             match status:
                 case ShipmentStatus.placed:
@@ -186,11 +191,44 @@ class ShipmentEventService(BaseService):
                 case ShipmentStatus.out_for_delivery:
                     subject = "Your Order is Arriving Soon 🛵"
                     template_name = "mail_out_for_delivery.html"
-                    context = {}
+                    
+                    # Generate 6-digit verification code
+                    verification_code = randint(100_000, 999_999)
+                    await add_shipment_verification_code(shipment.id, verification_code)
+                    logger.info(f"Generated verification code {verification_code} for shipment {shipment.id}")
+                    
+                    # Send SMS if phone available
+                    if client_phone and self.mail_client:
+                        sms_sent = await self.mail_client.send_sms(
+                            to=client_phone,
+                            body=f"Your order is arriving soon! Share the {verification_code} code with your delivery executive to receive your package."
+                        )
+                        if sms_sent:
+                            logger.info(f"Verification code SMS sent to {client_phone} for shipment {shipment.id}")
+                        else:
+                            # SMS failed, include code in email
+                            context["verification_code"] = verification_code
+                    else:
+                        # No phone, include code in email
+                        context["verification_code"] = verification_code
+                    
                 case ShipmentStatus.delivered:
                     subject = "Your Order is Delivered ✅"
                     template_name = "mail_delivered.html"
                     context = {"seller": shipment.seller.name}
+                    
+                    # Generate review token for review link
+                    from app.utils import generate_url_safe_token
+                    from app.config import app_settings
+                    
+                    review_token = generate_url_safe_token(
+                        {"id": str(shipment.id)},
+                        salt="review",
+                        expiry=timedelta(days=30),  # 30-day expiry for reviews
+                    )
+                    context["review_url"] = (
+                        f"http://{app_settings.APP_DOMAIN}/shipment/review?token={review_token}"
+                    )
                 case ShipmentStatus.cancelled:
                     subject = "Your Order is Cancelled ❌"
                     template_name = "mail_cancelled.html"
@@ -199,6 +237,7 @@ class ShipmentEventService(BaseService):
                     # Don't send email for in_transit or unknown status
                     return
             
+            # Send email notification
             await self.mail_client.send_email_with_template(
                 recipients=[EmailStr(client_email)],
                 subject=subject,

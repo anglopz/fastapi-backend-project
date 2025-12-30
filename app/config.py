@@ -8,6 +8,14 @@ _base_config = SettingsConfigDict(
 )
 
 
+class AppSettings(BaseSettings):
+    """Application settings"""
+    APP_NAME: str = "FastShip"
+    APP_DOMAIN: str = "localhost:8000"
+
+    model_config = _base_config
+
+
 class SecuritySettings(BaseSettings):
     JWT_SECRET: str = "your-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
@@ -56,10 +64,21 @@ class MailSettings(BaseSettings):
     model_config = _base_config
 
 
+class TwilioSettings(BaseSettings):
+    """Twilio SMS notification settings"""
+    TWILIO_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_NUMBER: str = ""
+
+    model_config = _base_config
+
+
 # New naming convention (db_settings, security_settings)
+app_settings = AppSettings()
 db_settings = DatabaseSettings()
 security_settings = SecuritySettings()
 mail_settings = MailSettings()
+twilio_settings = TwilioSettings()
 
 # Migration wrapper for backward compatibility
 # TODO: Remove this after all code is migrated to use db_settings

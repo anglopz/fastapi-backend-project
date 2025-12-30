@@ -24,6 +24,7 @@ class User(SQLModel):
     """Base user model (non-table)"""
     name: str
     email: str  # EmailStr validated at schema level, stored as str
+    email_verified: bool = Field(default=False, description="Email verification status")
     password_hash: str = Field(exclude=True)
 
 
@@ -140,6 +141,10 @@ class Shipment(SQLModel, table=True):
         )
     )
 
+    # Phase 2: client_contact_email is now required
+    client_contact_email: str = Field(description="Client contact email (required)")
+    client_contact_phone: str | None = Field(default=None, description="Client contact phone number")
+
     content: str
     weight: float = Field(le=25, description="Weight in kilograms")
     destination: int = Field(description="Destination zipcode")
@@ -165,9 +170,45 @@ class Shipment(SQLModel, table=True):
         sa_relationship_kwargs={"lazy": "selectin"},
     )
 
+    review: Optional["Review"] = Relationship(
+        back_populates="shipment",
+        sa_relationship_kwargs={"lazy": "selectin", "uselist": False},
+    )
+
     @property
     def timeline(self) -> list["ShipmentEvent"]:
         """Return events in reverse chronological order (newest first)"""
         if not self.events:
             return []
         return sorted(self.events, key=lambda e: e.created_at, reverse=True)
+
+
+class Review(SQLModel, table=True):
+    """Review model for shipment ratings"""
+    __tablename__ = "review"
+
+    id: UUID = Field(
+        sa_column=Column(
+            postgresql.UUID,
+            default=uuid4,
+            primary_key=True,
+        )
+    )
+    created_at: datetime = Field(
+        sa_column=Column(
+            postgresql.TIMESTAMP,
+            default=datetime.now,
+        )
+    )
+
+    rating: int = Field(ge=1, le=5, description="Rating from 1 to 5")
+    comment: str | None = Field(default=None, description="Optional review comment")
+
+    shipment_id: UUID = Field(
+        foreign_key="shipment.id",
+        unique=True,  # One-to-one relationship: one review per shipment
+    )
+    shipment: "Shipment" = Relationship(
+        back_populates="review",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
