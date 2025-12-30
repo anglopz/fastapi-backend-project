@@ -27,37 +27,21 @@ class SellerService(UserService):
         mail_client: Optional[MailClient] = None,
         tasks: Optional[BackgroundTasks] = None,
     ):
-        super().__init__(Seller, session)
+        super().__init__(Seller, session, mail_client=mail_client, tasks=tasks)
         self.mail_client = mail_client
         self.tasks = tasks
 
     async def add(self, seller_create: SellerCreate) -> Seller:
-        """Create a new seller and send welcome email"""
-        seller = await self._add_user(seller_create.model_dump())
-        
-        # Send welcome email in background (non-blocking)
-        if self.mail_client and self.tasks:
-            add_background_task(
-                self.tasks,
-                self._send_welcome_email,
-                seller.email,
-                seller.name,
-            )
-        
+        """Create a new seller and send verification email"""
+        # _add_user now handles verification email sending
+        seller = await self._add_user(seller_create.model_dump(), router_prefix="seller")
         return seller
-    
-    async def _send_welcome_email(self, email: EmailStr, name: str):
-        """Send welcome email to new seller (background task)"""
-        try:
-            await self.mail_client.send_email(
-                recipients=[email],
-                subject="Welcome to FastShip! 🚀",
-                body=f"Hi {name},\n\nWelcome to FastShip! Your seller account has been created successfully.\n\nYou can now start creating shipments and managing your deliveries.\n\nBest regards,\nFastShip Team",
-            )
-            logger.info(f"Welcome email sent to {email}")
-        except Exception as e:
-            logger.error(f"Failed to send welcome email to {email}: {e}")
+
+    async def verify_email(self, token: str) -> None:
+        """Verify seller email using verification token"""
+        await super().verify_email(token)
 
     async def token(self, email: str, password: str) -> str:
         """Generate JWT token for seller"""
-        return await self._generate_token(email, password)
+        # Phase 2: require_verification=True (enforce email verification)
+        return await self._generate_token(email, password, require_verification=True)

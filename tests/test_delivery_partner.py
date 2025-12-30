@@ -51,6 +51,17 @@ async def test_delivery_partner_login_success(client: AsyncClient, test_session:
     signup_response = await client.post("/partner/signup", json=partner_data)
     assert signup_response.status_code == 200
     
+    # Phase 2: Verify email before login (enforcement enabled)
+    from app.database.models import DeliveryPartner
+    from sqlalchemy import select
+    async with test_session() as session:
+        partner = await session.scalar(
+            select(DeliveryPartner).where(DeliveryPartner.email == partner_data["email"])
+        )
+        assert partner is not None
+        partner.email_verified = True
+        await session.commit()
+    
     # Now test login
     login_data = {
         "username": partner_data["email"],
@@ -104,6 +115,17 @@ async def test_delivery_partner_update(client: AsyncClient, test_session: AsyncS
     signup_response = await client.post("/partner/signup", json=partner_data)
     assert signup_response.status_code == 200
     
+    # Phase 2: Verify email before login
+    from app.database.models import DeliveryPartner
+    from sqlalchemy import select
+    async with test_session() as session:
+        partner = await session.scalar(
+            select(DeliveryPartner).where(DeliveryPartner.email == partner_data["email"])
+        )
+        assert partner is not None
+        partner.email_verified = True
+        await session.commit()
+    
     # Login to get token
     login_response = await client.post(
         "/partner/token",
@@ -148,6 +170,17 @@ async def test_delivery_partner_logout(client: AsyncClient, test_session: AsyncS
     signup_response = await client.post("/partner/signup", json=partner_data)
     assert signup_response.status_code == 200
     
+    # Phase 2: Verify email before login
+    from app.database.models import DeliveryPartner
+    from sqlalchemy import select
+    async with test_session() as session:
+        partner = await session.scalar(
+            select(DeliveryPartner).where(DeliveryPartner.email == partner_data["email"])
+        )
+        assert partner is not None
+        partner.email_verified = True
+        await session.commit()
+    
     login_response = await client.post(
         "/partner/token",
         data={"username": partner_data["email"], "password": partner_data["password"]},
@@ -169,4 +202,41 @@ async def test_delivery_partner_logout(client: AsyncClient, test_session: AsyncS
     
     # Give Redis time to close connections before event loop closes
     await asyncio.sleep(0.1)
+
+
+@pytest.mark.asyncio
+async def test_delivery_partner_verify_email(client: AsyncClient, test_session: AsyncSession):
+    """Test email verification endpoint for delivery partner"""
+    # Create a partner
+    partner_data = {
+        "name": "Verify Test Partner",
+        "email": "verifypartner@example.com",
+        "password": "testpassword123",
+        "serviceable_zip_codes": [50001],
+        "max_handling_capacity": 5
+    }
+    
+    signup_response = await client.post("/partner/signup", json=partner_data)
+    assert signup_response.status_code == 200
+    partner_id = signup_response.json()["id"]
+    
+    # Generate verification token (simulating email link)
+    from app.utils import generate_url_safe_token
+    token = generate_url_safe_token({"id": partner_id})
+    
+    # Verify email
+    response = await client.get(f"/partner/verify?token={token}")
+    assert response.status_code == 200
+    data = response.json()
+    assert "verified" in data.get("detail", "").lower()
+    
+    # Verify partner is now verified in database
+    from app.database.models import DeliveryPartner
+    from sqlalchemy import select
+    async with test_session() as session:
+        partner = await session.scalar(
+            select(DeliveryPartner).where(DeliveryPartner.id == partner_id)
+        )
+        assert partner is not None
+        assert partner.email_verified is True
 

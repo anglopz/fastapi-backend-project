@@ -72,6 +72,18 @@ async def test_seller_login_success(client: AsyncClient, test_session: AsyncSess
     signup_response = await client.post("/seller/signup", json=seller_data)
     assert signup_response.status_code == 200
     
+    # Phase 2: Verify email before login (enforcement enabled)
+    # Get the seller from database and manually verify (simulating email verification)
+    from app.database.models import Seller
+    from sqlalchemy import select
+    async with test_session() as session:
+        seller = await session.scalar(
+            select(Seller).where(Seller.email == seller_data["email"])
+        )
+        assert seller is not None
+        seller.email_verified = True
+        await session.commit()
+    
     # Now test login
     login_data = {
         "username": seller_data["email"],  # OAuth2 uses "username" field
@@ -139,4 +151,81 @@ async def test_seller_login_wrong_password(client: AsyncClient, test_session: As
     )
     
     assert response.status_code in [401, 404]  # New service returns 404
+
+
+@pytest.mark.asyncio
+async def test_seller_login_unverified_email(client: AsyncClient, test_session: AsyncSession):
+    """Test login fails for unverified email (Phase 2 enforcement)"""
+    # Create a seller
+    seller_data = {
+        "name": "Unverified Seller",
+        "email": "unverified@example.com",
+        "password": "testpassword123"
+    }
+    
+    signup_response = await client.post("/seller/signup", json=seller_data)
+    assert signup_response.status_code == 200
+    
+    # Try to login without verifying email
+    login_data = {
+        "username": seller_data["email"],
+        "password": seller_data["password"]
+    }
+    
+    response = await client.post(
+        "/seller/token",
+        data=login_data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    
+    # Phase 2: Should fail with 401 Unauthorized
+    assert response.status_code == 401
+    error_data = response.json()
+    error_msg = (error_data.get("detail") or error_data.get("message") or "").lower()
+    assert "not verified" in error_msg or "verification" in error_msg
+
+
+@pytest.mark.asyncio
+async def test_seller_verify_email(client: AsyncClient, test_session: AsyncSession):
+    """Test email verification endpoint"""
+    # Create a seller
+    seller_data = {
+        "name": "Verify Test Seller",
+        "email": "verify@example.com",
+        "password": "testpassword123"
+    }
+    
+    signup_response = await client.post("/seller/signup", json=seller_data)
+    assert signup_response.status_code == 200
+    seller_id = signup_response.json()["id"]
+    
+    # Generate verification token (simulating email link)
+    from app.utils import generate_url_safe_token
+    token = generate_url_safe_token({"id": seller_id})
+    
+    # Verify email
+    response = await client.get(f"/seller/verify?token={token}")
+    assert response.status_code == 200
+    data = response.json()
+    assert "verified" in data.get("detail", "").lower()
+    
+    # Verify seller is now verified in database
+    from app.database.models import Seller
+    from sqlalchemy import select
+    async with test_session() as session:
+        seller = await session.scalar(
+            select(Seller).where(Seller.id == seller_id)
+        )
+        assert seller is not None
+        assert seller.email_verified is True
+
+
+@pytest.mark.asyncio
+async def test_seller_verify_email_invalid_token(client: AsyncClient):
+    """Test email verification with invalid token"""
+    response = await client.get("/seller/verify?token=invalid_token")
+    assert response.status_code == 400
+    error_data = response.json()
+    error_msg = (error_data.get("detail") or error_data.get("message") or "").lower()
+    assert "invalid" in error_msg or "expired" in error_msg
 

@@ -120,7 +120,7 @@ def get_shipment_service(
     """Create shipment service with delivery partner service, event service, and mail dependencies"""
     return ShipmentService(
         session,
-        DeliveryPartnerService(session),
+        DeliveryPartnerService(session, mail_client=mail_client),
         ShipmentEventService(session, mail_client=mail_client),
         mail_client=mail_client,
     )
@@ -139,9 +139,12 @@ def get_seller_service(
 
 
 # Delivery partner service dep
-def get_delivery_partner_service(session: SessionDep):
-    """Create delivery partner service"""
-    return DeliveryPartnerService(session)
+def get_delivery_partner_service(
+    session: SessionDep,
+    mail_client: Annotated[MailClient, Depends(get_mail_service)],
+):
+    """Create delivery partner service with mail dependencies"""
+    return DeliveryPartnerService(session, mail_client=mail_client)
 
 
 # Seller dep annotation

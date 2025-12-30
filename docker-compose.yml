@@ -2,6 +2,7 @@ services:
   api:
     build: .
     working_dir: /code
+    user: "1000:1000" # Run as host user to avoid permission issues with created files
     ports:
       - "8000:8000"
     environment:
