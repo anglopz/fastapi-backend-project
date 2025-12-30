@@ -8,8 +8,9 @@ from typing import Optional
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 from pydantic import EmailStr
+from twilio.rest import Client as TwilioClient
 
-from app.config import mail_settings
+from app.config import mail_settings, twilio_settings
 from app.utils import TEMPLATE_DIR
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class MailClient:
         """Initialize mail client with connection pooling"""
         self._fastmail: Optional[FastMail] = None
         self._template_env: Optional[Environment] = None
+        self._twilio_client: Optional[TwilioClient] = None
         self._max_retries = 3
         self._retry_delay = 1.0  # Initial delay in seconds
         
@@ -198,6 +200,57 @@ class MailClient:
         )
         return False
     
+    @property
+    def twilio_client(self) -> Optional[TwilioClient]:
+        """Lazy initialization of Twilio client for SMS"""
+        if self._twilio_client is None:
+            # Only initialize if Twilio credentials are provided
+            if twilio_settings.TWILIO_SID and twilio_settings.TWILIO_AUTH_TOKEN:
+                try:
+                    self._twilio_client = TwilioClient(
+                        twilio_settings.TWILIO_SID,
+                        twilio_settings.TWILIO_AUTH_TOKEN,
+                    )
+                    logger.info("Twilio client initialized")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize Twilio client: {e}")
+                    return None
+            else:
+                logger.warning("Twilio credentials not configured, SMS disabled")
+                return None
+        return self._twilio_client
+
+    async def send_sms(self, to: str, body: str) -> bool:
+        """
+        Send SMS via Twilio.
+        
+        Args:
+            to: Phone number to send SMS to (E.164 format)
+            body: SMS message body
+            
+        Returns:
+            True if SMS was sent successfully, False otherwise
+        """
+        if not self.twilio_client:
+            logger.warning("Twilio client not available, SMS not sent")
+            return False
+        
+        if not twilio_settings.TWILIO_NUMBER:
+            logger.warning("Twilio number not configured, SMS not sent")
+            return False
+        
+        try:
+            message = self.twilio_client.messages.create(
+                from_=twilio_settings.TWILIO_NUMBER,
+                to=to,
+                body=body,
+            )
+            logger.info(f"SMS sent successfully to {to} (SID: {message.sid})")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send SMS to {to}: {e}")
+            return False
+
     async def close(self):
         """Close mail client connections"""
         if self._fastmail:
@@ -205,6 +258,8 @@ class MailClient:
             # are managed internally and will be cleaned up
             self._fastmail = None
             self._template_env = None
+        # Twilio client doesn't need explicit closing
+        self._twilio_client = None
 
 
 # Singleton instance (optional - can also be instantiated per service)
