@@ -12,9 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.shipment import ShipmentCreate, ShipmentUpdate
 from app.core.mail import MailClient
-from app.database.models import DeliveryPartner, Review, Seller, Shipment, ShipmentStatus
+from app.database.models import DeliveryPartner, Review, Seller, Shipment, ShipmentStatus, Tag, TagName
 from app.database.redis import get_shipment_verification_code
 from app.utils import decode_url_safe_token
+from sqlmodel import select
 
 from .base import BaseService
 from .delivery_partner import DeliveryPartnerService
@@ -248,3 +249,98 @@ class ShipmentService(BaseService):
         
         await self._add(new_review)
         logger.info(f"Review submitted for shipment {shipment.id} with rating {rating}")
+
+    async def add_tag(self, shipment_id: UUID, tag_name: TagName) -> Shipment:
+        """
+        Add a tag to a shipment.
+        
+        Args:
+            shipment_id: UUID of the shipment
+            tag_name: TagName enum value
+            
+        Returns:
+            Updated Shipment with tag added
+            
+        Raises:
+            HTTPException: If shipment not found or tag already exists
+        """
+        shipment = await self.get(shipment_id)
+        if not shipment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Shipment not found",
+            )
+        
+        # Refresh to load tags relationship
+        await self.session.refresh(shipment, ["tags"])
+        
+        # Get or create tag
+        tag = await self.session.scalar(
+            select(Tag).where(Tag.name == tag_name)
+        )
+        
+        if not tag:
+            # Create tag with default instruction
+            tag = Tag(
+                name=tag_name,
+                instruction=f"Handle with care: {tag_name.value}",
+            )
+            await self._add(tag)
+        
+        # Check if tag already exists on shipment
+        if tag in shipment.tags:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Tag '{tag_name.value}' already exists on this shipment",
+            )
+        
+        # Add tag to shipment
+        shipment.tags.append(tag)
+        await self.session.commit()
+        await self.session.refresh(shipment, ["tags"])
+        
+        logger.info(f"Added tag '{tag_name.value}' to shipment {shipment_id}")
+        return shipment
+
+    async def remove_tag(self, shipment_id: UUID, tag_name: TagName) -> Shipment:
+        """
+        Remove a tag from a shipment.
+        
+        Args:
+            shipment_id: UUID of the shipment
+            tag_name: TagName enum value
+            
+        Returns:
+            Updated Shipment with tag removed
+            
+        Raises:
+            HTTPException: If shipment not found or tag doesn't exist
+        """
+        shipment = await self.get(shipment_id)
+        if not shipment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Shipment not found",
+            )
+        
+        # Refresh to load tags relationship
+        await self.session.refresh(shipment, ["tags"])
+        
+        # Find tag
+        tag = await self.session.scalar(
+            select(Tag).where(Tag.name == tag_name)
+        )
+        
+        if not tag or tag not in shipment.tags:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tag '{tag_name.value}' not found on this shipment",
+            )
+        
+        # Remove tag from shipment
+        shipment.tags.remove(tag)
+        await self.session.commit()
+        await self.session.refresh(shipment, ["tags"])
+        
+        logger.info(f"Removed tag '{tag_name.value}' from shipment {shipment_id}")
+        return shipment

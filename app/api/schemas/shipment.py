@@ -2,10 +2,11 @@
 Shipment schemas
 """
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 
-from app.database.models import ShipmentStatus
+from app.database.models import ShipmentStatus, TagName
 
 
 class BaseShipment(BaseModel):
@@ -15,11 +16,29 @@ class BaseShipment(BaseModel):
 
 
 class ShipmentRead(BaseShipment):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: UUID
     status: ShipmentStatus
     estimated_delivery: datetime
     client_contact_email: str
     client_contact_phone: str | None = None
+    tags: Optional[list[TagName]] = Field(default=None, description="List of tags associated with the shipment")
+    
+    @field_validator('tags', mode='before')
+    @classmethod
+    def extract_tag_names(cls, v):
+        """Extract tag names from Tag objects if needed"""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            # If list contains Tag objects, extract names
+            # Check if first item has a 'name' attribute (Tag object)
+            if v and hasattr(v[0], 'name'):
+                return [tag.name for tag in v]
+            # If already TagName enum values, return as is
+            return v
+        return v
 
 
 class ShipmentCreate(BaseShipment):

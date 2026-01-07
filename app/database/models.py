@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 from pydantic import EmailStr, field_validator
 from sqlalchemy.dialects import postgresql
-from sqlalchemy import ARRAY, INTEGER, JSON
+from sqlalchemy import INTEGER, JSON
 from sqlmodel import Column, Field, Relationship, SQLModel
 
 
@@ -18,6 +18,20 @@ class ShipmentStatus(str, Enum):
     out_for_delivery = "out_for_delivery"
     delivered = "delivered"
     cancelled = "cancelled"
+
+
+class TagName(str, Enum):
+    """Predefined tag names for shipments"""
+    EXPRESS = "express"
+    STANDARD = "standard"
+    FRAGILE = "fragile"
+    HEAVY = "heavy"
+    INTERNATIONAL = "international"
+    DOMESTIC = "domestic"
+    TEMPERATURE_CONTROLLED = "temperature_controlled"
+    GIFT = "gift"
+    RETURN = "return"
+    DOCUMENTS = "documents"
 
 
 class User(SQLModel):
@@ -52,6 +66,36 @@ class Seller(User, table=True):
     )
 
 
+class ServicableLocation(SQLModel, table=True):
+    """Junction table for many-to-many relationship between DeliveryPartner and Location"""
+    __tablename__ = "servicable_location"
+
+    delivery_partner_id: UUID = Field(
+        foreign_key="delivery_partner.id",
+        primary_key=True,
+    )
+    location_zip_code: int = Field(
+        foreign_key="location.zip_code",
+        primary_key=True,
+    )
+
+
+class Location(SQLModel, table=True):
+    """Location model for serviceable areas"""
+    __tablename__ = "location"
+
+    zip_code: int = Field(
+        primary_key=True,
+        description="Zip code (primary key)",
+    )
+
+    delivery_partners: list["DeliveryPartner"] = Relationship(
+        back_populates="servicable_locations",
+        link_model=ServicableLocation,
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
+
 class DeliveryPartner(User, table=True):
     """Delivery Partner model inheriting from User"""
     __tablename__ = "delivery_partner"
@@ -70,13 +114,16 @@ class DeliveryPartner(User, table=True):
         )
     )
 
-    serviceable_zip_codes: list[int] = Field(
-        sa_column=Column(ARRAY(INTEGER)),
-    )
     max_handling_capacity: int
 
     shipments: list["Shipment"] = Relationship(
         back_populates="delivery_partner",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+    
+    servicable_locations: list["Location"] = Relationship(
+        back_populates="delivery_partners",
+        link_model=ServicableLocation,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
     
@@ -93,6 +140,41 @@ class DeliveryPartner(User, table=True):
     def current_handling_capacity(self):
         """Calculate remaining handling capacity"""
         return self.max_handling_capacity - len(self.active_shipments)
+
+
+class ShipmentTag(SQLModel, table=True):
+    """Junction table for many-to-many relationship between Shipment and Tag"""
+    __tablename__ = "shipment_tag"
+
+    shipment_id: UUID = Field(
+        foreign_key="shipment.id",
+        primary_key=True,
+    )
+    tag_id: UUID = Field(
+        foreign_key="tag.id",
+        primary_key=True,
+    )
+
+
+class Tag(SQLModel, table=True):
+    """Tag model for categorizing shipments"""
+    __tablename__ = "tag"
+
+    id: UUID = Field(
+        sa_column=Column(
+            postgresql.UUID,
+            default=uuid4,
+            primary_key=True,
+        )
+    )
+    name: TagName = Field(description="Tag name (predefined enum)")
+    instruction: str = Field(description="Instruction for handling tagged shipments")
+
+    shipments: list["Shipment"] = Relationship(
+        back_populates="tags",
+        link_model=ShipmentTag,
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
 
 
 class ShipmentEvent(SQLModel, table=True):
@@ -173,6 +255,12 @@ class Shipment(SQLModel, table=True):
     review: Optional["Review"] = Relationship(
         back_populates="shipment",
         sa_relationship_kwargs={"lazy": "selectin", "uselist": False},
+    )
+
+    tags: list["Tag"] = Relationship(
+        back_populates="shipments",
+        link_model=ShipmentTag,
+        sa_relationship_kwargs={"lazy": "selectin"},
     )
 
     @property
