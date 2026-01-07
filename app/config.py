@@ -46,6 +46,14 @@ class DatabaseSettings(BaseSettings):
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@"
             f"{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
+    
+    @property
+    def REDIS_URL(self) -> str:
+        """Return Redis URL for Celery broker/backend.
+        
+        Uses database 2 for Celery to avoid conflicts with other Redis usage.
+        """
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/2"
 
 
 class MailSettings(BaseSettings):

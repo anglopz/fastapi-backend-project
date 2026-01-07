@@ -15,6 +15,16 @@ services:
       - POSTGRES_DB=fastapi_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_FROM=${MAIL_FROM:-noreply@example.com}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_SERVER=${MAIL_SERVER:-smtp.gmail.com}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME:-FastShip}
+      - MAIL_STARTTLS=${MAIL_STARTTLS:-true}
+      - MAIL_SSL_TLS=${MAIL_SSL_TLS:-false}
+      - USE_CREDENTIALS=${USE_CREDENTIALS:-true}
+      - VALIDATE_CERTS=${VALIDATE_CERTS:-true}
     depends_on:
       db:
         condition: service_healthy
@@ -46,6 +56,56 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+
+  celery_worker:
+    build: .
+    working_dir: /code
+    user: "1000:1000"
+    command: celery -A app.celery_app worker --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/2
+      - DATABASE_URL=postgresql://postgres:password@db:5432/fastapi_db
+      - POSTGRES_SERVER=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=fastapi_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_FROM=${MAIL_FROM:-noreply@example.com}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_SERVER=${MAIL_SERVER:-smtp.gmail.com}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME:-FastShip}
+      - MAIL_STARTTLS=${MAIL_STARTTLS:-true}
+      - MAIL_SSL_TLS=${MAIL_SSL_TLS:-false}
+      - USE_CREDENTIALS=${USE_CREDENTIALS:-true}
+      - VALIDATE_CERTS=${VALIDATE_CERTS:-true}
+      - TWILIO_SID=${TWILIO_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_NUMBER=${TWILIO_NUMBER:-}
+      - APP_DOMAIN=${APP_DOMAIN:-localhost:8000}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_FROM=${MAIL_FROM:-noreply@example.com}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_SERVER=${MAIL_SERVER:-smtp.gmail.com}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME:-FastShip}
+      - MAIL_STARTTLS=${MAIL_STARTTLS:-true}
+      - MAIL_SSL_TLS=${MAIL_SSL_TLS:-false}
+      - USE_CREDENTIALS=${USE_CREDENTIALS:-true}
+      - VALIDATE_CERTS=${VALIDATE_CERTS:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - .:/code
+    restart: unless-stopped
 
 volumes:
   postgres_data:
