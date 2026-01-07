@@ -25,6 +25,9 @@ services:
       - MAIL_SSL_TLS=${MAIL_SSL_TLS:-false}
       - USE_CREDENTIALS=${USE_CREDENTIALS:-true}
       - VALIDATE_CERTS=${VALIDATE_CERTS:-true}
+      - TWILIO_SID=${TWILIO_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_NUMBER=${TWILIO_NUMBER:-}
     depends_on:
       db:
         condition: service_healthy
