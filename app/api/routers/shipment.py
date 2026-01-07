@@ -4,7 +4,7 @@ Shipment router
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Request, status
+from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.templating import Jinja2Templates
 from typing import Annotated
 
@@ -43,12 +43,9 @@ async def submit_shipment(
     seller: SellerDep,
     shipment: ShipmentCreate,
     service: ShipmentServiceDep,
-    tasks: BackgroundTasks,
 ):
     """Create a new shipment (authenticated seller required)"""
-    # Inject BackgroundTasks into service for email sending
-    service.tasks = tasks
-    service.event_service.tasks = tasks
+    # Phase 3: Celery tasks are used directly by services (no BackgroundTasks needed)
     return await service.add(shipment, seller)
 
 
@@ -59,7 +56,6 @@ async def update_shipment(
     shipment_update: ShipmentUpdate,
     partner: DeliveryPartnerDep,
     service: ShipmentServiceDep,
-    tasks: BackgroundTasks,
 ):
     """Update a shipment (only the assigned delivery partner can update)"""
     # Update data with given fields
@@ -80,10 +76,7 @@ async def update_shipment(
             detail="Shipment not found",
         )
 
-    # Inject BackgroundTasks into service for email sending
-    service.tasks = tasks
-    service.event_service.tasks = tasks
-    
+    # Phase 3: Celery tasks are used directly by services (no BackgroundTasks needed)
     # Update shipment with event creation (partner passed for authorization check)
     return await service.update(shipment, shipment_update, partner=partner)
 
@@ -114,13 +107,9 @@ async def cancel_shipment(
     id: UUID,
     seller: SellerDep,
     service: ShipmentServiceDep,
-    tasks: BackgroundTasks,
 ):
     """Cancel a shipment (only the seller who created it can cancel)"""
-    # Inject BackgroundTasks into service for email sending
-    service.tasks = tasks
-    service.event_service.tasks = tasks
-    
+    # Phase 3: Celery tasks are used directly by services (no BackgroundTasks needed)
     return await service.cancel(id, seller)
 
 

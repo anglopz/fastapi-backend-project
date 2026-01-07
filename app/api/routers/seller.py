@@ -3,7 +3,7 @@ Seller router
 """
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from pydantic import EmailStr
@@ -30,11 +30,9 @@ templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 async def register_seller(
     seller: SellerCreate,
     service: SellerServiceDep,
-    tasks: BackgroundTasks,
 ):
     """Register a new seller"""
-    # Inject BackgroundTasks into service for email sending
-    service.tasks = tasks
+    # Phase 3: Celery tasks are used directly by services (no BackgroundTasks needed)
     return await service.add(seller)
 
 
@@ -48,7 +46,7 @@ async def login_seller(
     token = await service.token(request_form.username, request_form.password)
     return {
         "access_token": token,
-        "type": "jwt",
+        "token_type": "bearer",
     }
 
 
@@ -68,11 +66,9 @@ async def verify_seller_email(
 async def forgot_password(
     email: EmailStr,
     service: SellerServiceDep,
-    tasks: BackgroundTasks,
 ):
     """Request password reset link via email"""
-    # Inject BackgroundTasks into service for email sending
-    service.tasks = tasks
+    # Phase 3: Celery tasks are used directly by services (no BackgroundTasks needed)
     await service.send_password_reset_link(email, router.prefix)
     return {"detail": "Check email for password reset link"}
 
