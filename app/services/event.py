@@ -303,11 +303,20 @@ class ShipmentEventService(BaseService):
                     
                     # Send SMS via Celery if phone available
                     if client_phone:
+                        # Format phone number to E.164 format (required by Twilio)
+                        # If phone doesn't start with +, assume it's a Spanish number and add +34
+                        formatted_phone = client_phone
+                        if not formatted_phone.startswith('+'):
+                            # Remove leading 0 if present (Spanish format: 0XXXXXXXXX -> +34XXXXXXXXX)
+                            if formatted_phone.startswith('0'):
+                                formatted_phone = formatted_phone[1:]
+                            formatted_phone = f"+34{formatted_phone}"
+                        
                         send_sms_task.delay(
-                            to=client_phone,
+                            to=formatted_phone,
                             body=f"Your order is arriving soon! Share the {verification_code} code with your delivery executive to receive your package."
                         )
-                        logger.info(f"Queued SMS to {client_phone} for shipment {shipment.id}")
+                        logger.info(f"Queued SMS to {formatted_phone} for shipment {shipment.id}")
                     else:
                         # No phone, include code in email
                         context["verification_code"] = verification_code
