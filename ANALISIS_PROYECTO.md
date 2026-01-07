@@ -19,3 +19,18 @@
 - Timezone-aware datetime handling in shipments
 \n**Status:** 19/19 tests passing ✅
 **Production Ready:** Yes (with production SMTP)
+
+## Section 25: ✅ COMPLETED 2026-01-07
+
+### Many-to-Many Relationships Implementation
+- **Phase 1:** Tag system for shipments (fully additive)
+- **Phase 2:** Location system for delivery partners (additive with compatibility)
+- **Phase 3:** Remove ARRAY field breaking change
+- **Database:** New tables: tag, shipment_tags, serviceable_location, partner_locations
+- **Migration:** Dropped serviceable_zip_codes ARRAY column
+\n### Breaking Changes
+- Field name: serviceable_zip_codes → servicable_locations
+- API consumers must update request/response handling
+- All application code updated, tests pending
+\n**Status:** Database migration applied ✅
+**Codebase:** Simplified with single source of truth ✅
