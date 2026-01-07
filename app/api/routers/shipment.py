@@ -12,7 +12,7 @@ from app.config import app_settings
 from app.utils import TEMPLATE_DIR
 from ..dependencies import DeliveryPartnerDep, SellerDep, ShipmentServiceDep
 from ..schemas.shipment import ShipmentCreate, ShipmentRead, ShipmentUpdate
-from app.database.models import ShipmentEvent
+from app.database.models import ShipmentEvent, TagName
 
 
 router = APIRouter(prefix="/shipment", tags=["Shipment"])
@@ -33,6 +33,9 @@ async def get_shipment(id: UUID, service: ShipmentServiceDep):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Given id doesn't exist!",
         )
+    
+    # Refresh to load tags relationship
+    await service.session.refresh(shipment, ["tags"])
 
     return shipment
 
@@ -192,3 +195,25 @@ async def submit_review(
     """Submit a review for a shipment"""
     await service.rate(token, rating, comment)
     return {"detail": "Review submitted successfully"}
+
+
+### Add tag to shipment
+@router.get("/tag", response_model=ShipmentRead)
+async def add_tag_to_shipment(
+    id: UUID,
+    tag_name: TagName,
+    service: ShipmentServiceDep,
+):
+    """Add a tag to a shipment"""
+    return await service.add_tag(id, tag_name)
+
+
+### Remove tag from shipment
+@router.delete("/tag", response_model=ShipmentRead)
+async def remove_tag_from_shipment(
+    id: UUID,
+    tag_name: TagName,
+    service: ShipmentServiceDep,
+):
+    """Remove a tag from a shipment"""
+    return await service.remove_tag(id, tag_name)
