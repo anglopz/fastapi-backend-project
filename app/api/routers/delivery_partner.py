@@ -37,7 +37,11 @@ async def register_delivery_partner(
 ):
     """Register a new delivery partner"""
     # Phase 3: Celery tasks are used directly by services (no BackgroundTasks needed)
-    return await service.add(partner)
+    # Phase 2: add() method now populates servicable_locations
+    partner_obj = await service.add(partner)
+    # Refresh to ensure servicable_locations is loaded
+    await service.session.refresh(partner_obj, ["servicable_locations"])
+    return partner_obj
 
 
 ### Verify delivery partner email
@@ -127,12 +131,34 @@ async def update_delivery_partner(
             detail="No data provided to update",
         )
 
-    # Update partner fields
+    # Phase 3: Handle servicable_locations separately (it's a relationship, not a field)
+    servicable_locations = update.pop("servicable_locations", None)
+    
+    # Update other partner fields
     for key, value in update.items():
         if hasattr(partner, key):
             setattr(partner, key, value)
     
-    return await service.update(partner)
+    # Update servicable_locations relationship if provided
+    if servicable_locations is not None:
+        from app.database.models import Location
+        from sqlmodel import select
+        locations = []
+        for zip_code in servicable_locations:
+            # Get or create Location
+            location = await service.session.scalar(
+                select(Location).where(Location.zip_code == zip_code)
+            )
+            if not location:
+                location = Location(zip_code=zip_code)
+                await service._add(location)
+            locations.append(location)
+        partner.servicable_locations = locations
+    
+    updated_partner = await service.update(partner)
+    # Refresh to ensure servicable_locations is loaded
+    await service.session.refresh(updated_partner, ["servicable_locations"])
+    return updated_partner
 
 
 ### Logout a delivery partner
