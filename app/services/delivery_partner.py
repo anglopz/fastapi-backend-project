@@ -5,11 +5,11 @@ from typing import Optional, Sequence
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, any_
+from sqlmodel import select
 
 from app.api.schemas.delivery_partner import DeliveryPartnerCreate
 from app.core.mail import MailClient
-from app.database.models import DeliveryPartner, Shipment
+from app.database.models import DeliveryPartner, Location, Shipment
 
 from .user import UserService
 
@@ -26,21 +26,53 @@ class DeliveryPartnerService(UserService):
         super().__init__(DeliveryPartner, session, mail_client=mail_client)
 
     async def add(self, delivery_partner: DeliveryPartnerCreate):
-        """Create a new delivery partner and send verification email"""
-        # _add_user now handles verification email sending
-        return await self._add_user(delivery_partner.model_dump(), router_prefix="partner")
+        """
+        Create a new delivery partner and send verification email.
+        
+        Phase 3: Populates servicable_locations relationship from servicable_locations in schema.
+        """
+        # Extract servicable_locations from schema (now uses relationship directly)
+        partner_data = delivery_partner.model_dump()
+        servicable_locations = partner_data.pop("servicable_locations", [])
+        
+        # Create delivery partner (without servicable_locations, as it's a relationship)
+        partner = await self._add_user(partner_data, router_prefix="partner")
+        
+        # Populate servicable_locations relationship
+        if servicable_locations:
+            locations = []
+            for zip_code in servicable_locations:
+                # Get or create Location
+                location = await self.session.scalar(
+                    select(Location).where(Location.zip_code == zip_code)
+                )
+                if not location:
+                    location = Location(zip_code=zip_code)
+                    await self._add(location)
+                locations.append(location)
+            
+            # Set the relationship
+            partner.servicable_locations = locations
+            await self.session.commit()
+            await self.session.refresh(partner, ["servicable_locations"])
+        
+        return partner
 
     async def verify_email(self, token: str) -> None:
         """Verify delivery partner email using verification token"""
         await super().verify_email(token)
 
     async def get_partner_by_zipcode(self, zipcode: int) -> Sequence[DeliveryPartner]:
-        """Get delivery partners that service a given zipcode"""
+        """
+        Get delivery partners that service a given zipcode.
+        
+        Phase 3: Uses servicable_locations relationship only (ARRAY field removed).
+        """
         return (
             await self.session.scalars(
-                select(DeliveryPartner).where(
-                    zipcode == any_(DeliveryPartner.serviceable_zip_codes)
-                )
+                select(DeliveryPartner)
+                .join(Location, DeliveryPartner.servicable_locations)
+                .where(Location.zip_code == zipcode)
             )
         ).all()
     
