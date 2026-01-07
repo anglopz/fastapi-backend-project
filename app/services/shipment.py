@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
 
-from fastapi import BackgroundTasks, HTTPException, status
+from fastapi import HTTPException, status
+# Phase 3: BackgroundTasks removed, using Celery as primary method
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.shipment import ShipmentCreate, ShipmentUpdate
@@ -31,13 +32,12 @@ class ShipmentService(BaseService):
         partner_service: DeliveryPartnerService,
         event_service: ShipmentEventService,
         mail_client: Optional[MailClient] = None,
-        tasks: Optional[BackgroundTasks] = None,
     ):
         super().__init__(Shipment, session)
         self.partner_service = partner_service
         self.event_service = event_service
         self.mail_client = mail_client
-        self.tasks = tasks
+        # Phase 3: BackgroundTasks removed, using Celery as primary method
 
     async def get(self, id: UUID) -> Shipment | None:
         """Get a shipment by ID"""
@@ -116,8 +116,13 @@ class ShipmentService(BaseService):
         update_data = shipment_update.model_dump(exclude_none=True, exclude=["verification_code"])
         
         # Update estimated_delivery if provided
+        # Convert timezone-aware datetime to timezone-naive (database expects TIMESTAMP WITHOUT TIME ZONE)
         if shipment_update.estimated_delivery:
-            shipment.estimated_delivery = shipment_update.estimated_delivery
+            est_delivery = shipment_update.estimated_delivery
+            # If datetime is timezone-aware, convert to UTC and remove timezone info
+            if est_delivery.tzinfo is not None:
+                est_delivery = est_delivery.replace(tzinfo=None)
+            shipment.estimated_delivery = est_delivery
         
         # Update status if provided
         if shipment_update.status:

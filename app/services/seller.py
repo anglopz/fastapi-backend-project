@@ -4,14 +4,12 @@ Seller service - refactored to use UserService base class
 import logging
 from typing import Optional
 
-from fastapi import BackgroundTasks
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.seller import SellerCreate
 from app.core.mail import MailClient
 from app.database.models import Seller
-from app.tasks import add_background_task
 
 from .user import UserService
 
@@ -25,11 +23,10 @@ class SellerService(UserService):
         self,
         session: AsyncSession,
         mail_client: Optional[MailClient] = None,
-        tasks: Optional[BackgroundTasks] = None,
     ):
-        super().__init__(Seller, session, mail_client=mail_client, tasks=tasks)
+        # Phase 3: BackgroundTasks removed, using Celery as primary method
+        super().__init__(Seller, session, mail_client=mail_client)
         self.mail_client = mail_client
-        self.tasks = tasks
 
     async def add(self, seller_create: SellerCreate) -> Seller:
         """Create a new seller and send verification email"""

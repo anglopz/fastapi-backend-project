@@ -3,7 +3,7 @@ Delivery Partner service
 """
 from typing import Optional, Sequence
 
-from fastapi import BackgroundTasks, HTTPException, status
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select, any_
 
@@ -21,9 +21,9 @@ class DeliveryPartnerService(UserService):
         self,
         session: AsyncSession,
         mail_client: Optional[MailClient] = None,
-        tasks: Optional[BackgroundTasks] = None,
     ):
-        super().__init__(DeliveryPartner, session, mail_client=mail_client, tasks=tasks)
+        # Phase 3: BackgroundTasks removed, using Celery as primary method
+        super().__init__(DeliveryPartner, session, mail_client=mail_client)
 
     async def add(self, delivery_partner: DeliveryPartnerCreate):
         """Create a new delivery partner and send verification email"""

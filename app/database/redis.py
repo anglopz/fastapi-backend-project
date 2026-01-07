@@ -60,10 +60,18 @@ async def close_redis():
     """Close Redis connections"""
     global _cache_client, _token_blacklist
     if _cache_client:
-        await _cache_client.aclose()
+        # Handle both aclose() (redis 5.x) and close() (redis 4.x)
+        if hasattr(_cache_client, 'aclose'):
+            await _cache_client.aclose()
+        elif hasattr(_cache_client, 'close'):
+            await _cache_client.close()
         _cache_client = None
     if _token_blacklist:
-        await _token_blacklist.aclose()
+        # Handle both aclose() (redis 5.x) and close() (redis 4.x)
+        if hasattr(_token_blacklist, 'aclose'):
+            await _token_blacklist.aclose()
+        elif hasattr(_token_blacklist, 'close'):
+            await _token_blacklist.close()
         _token_blacklist = None
 
 

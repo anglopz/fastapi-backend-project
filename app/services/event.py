@@ -2,22 +2,30 @@
 Shipment Event Service - handles event creation and timeline management
 """
 import logging
+from datetime import timedelta
 from random import randint
 from typing import Optional
 from uuid import UUID
 
-from fastapi import BackgroundTasks
+# Phase 3: BackgroundTasks removed, using Celery as primary method
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.mail import MailClient
 from app.database.models import Shipment, ShipmentEvent, ShipmentStatus
 from app.database.redis import add_shipment_verification_code
-from app.tasks import add_background_task
 
 from .base import BaseService
 
 logger = logging.getLogger(__name__)
+
+# Try to import Celery tasks (optional - fallback to BackgroundTasks if not available)
+try:
+    from app.celery_app import send_email_with_template_task, send_sms_task
+    CELERY_AVAILABLE = True
+except ImportError:
+    CELERY_AVAILABLE = False
+    logger.warning("Celery not available, falling back to BackgroundTasks")
 
 
 class ShipmentEventService(BaseService):
@@ -27,11 +35,10 @@ class ShipmentEventService(BaseService):
         self,
         session: AsyncSession,
         mail_client: Optional[MailClient] = None,
-        tasks: Optional[BackgroundTasks] = None,
     ):
         super().__init__(ShipmentEvent, session)
         self.mail_client = mail_client
-        self.tasks = tasks
+        # Phase 3: BackgroundTasks removed, using Celery as primary method
 
     async def create_event(
         self,
@@ -77,15 +84,16 @@ class ShipmentEventService(BaseService):
         event = await self._add(new_event)
         
         # Send notification email (if mail client available and not in_transit)
-        if self.mail_client and self.tasks and status != ShipmentStatus.in_transit:
+        if self.mail_client and status != ShipmentStatus.in_transit:
             # Reload shipment with relationships for email
             await self.session.refresh(shipment, ["seller", "delivery_partner"])
-            add_background_task(
-                self.tasks,
-                self._send_status_notification,
-                shipment,
-                status,
-            )
+            
+            # Phase 3: Use Celery as primary method (BackgroundTasks removed)
+            if CELERY_AVAILABLE:
+                # Use Celery tasks (async call, but task runs in worker)
+                await self._send_status_notification_celery(shipment, status)
+            else:
+                logger.warning("Celery not available - notifications will not be sent")
         
         return event
 
@@ -247,4 +255,96 @@ class ShipmentEventService(BaseService):
             logger.info(f"Status notification sent to {client_email} for shipment {shipment.id}")
         except Exception as e:
             logger.error(f"Failed to send status notification for shipment {shipment.id}: {e}")
+
+    async def _send_status_notification_celery(
+        self,
+        shipment: Shipment,
+        status: ShipmentStatus,
+    ):
+        """
+        Send status notification using Celery tasks (Phase 2).
+        
+        This method prepares the notification data and queues it via Celery.
+        
+        Args:
+            shipment: The shipment with loaded relationships
+            status: The new status
+        """
+        try:
+            # Phase 2: client_contact_email is now required, so it should always be present
+            client_email = shipment.client_contact_email
+            client_phone = getattr(shipment, "client_contact_phone", None)
+            
+            if not client_email:
+                logger.warning(f"Shipment {shipment.id} missing client_contact_email (required field), skipping notification")
+                return
+            
+            subject: str
+            template_name: str
+            context: dict = {}
+            verification_code: Optional[int] = None
+            
+            match status:
+                case ShipmentStatus.placed:
+                    subject = "Your Order is Shipped 🚛"
+                    template_name = "mail_placed.html"
+                    context = {
+                        "seller": shipment.seller.name,
+                        "partner": shipment.delivery_partner.name,
+                    }
+                case ShipmentStatus.out_for_delivery:
+                    subject = "Your Order is Arriving Soon 🛵"
+                    template_name = "mail_out_for_delivery.html"
+                    
+                    # Generate 6-digit verification code
+                    verification_code = randint(100_000, 999_999)
+                    await add_shipment_verification_code(shipment.id, verification_code)
+                    logger.info(f"Generated verification code {verification_code} for shipment {shipment.id}")
+                    
+                    # Send SMS via Celery if phone available
+                    if client_phone:
+                        send_sms_task.delay(
+                            to=client_phone,
+                            body=f"Your order is arriving soon! Share the {verification_code} code with your delivery executive to receive your package."
+                        )
+                        logger.info(f"Queued SMS to {client_phone} for shipment {shipment.id}")
+                    else:
+                        # No phone, include code in email
+                        context["verification_code"] = verification_code
+                    
+                case ShipmentStatus.delivered:
+                    subject = "Your Order is Delivered ✅"
+                    template_name = "mail_delivered.html"
+                    context = {"seller": shipment.seller.name}
+                    
+                    # Generate review token for review link
+                    from app.utils import generate_url_safe_token
+                    from app.config import app_settings
+                    
+                    review_token = generate_url_safe_token(
+                        {"id": str(shipment.id)},
+                        salt="review",
+                        expiry=timedelta(days=30),  # 30-day expiry for reviews
+                    )
+                    context["review_url"] = (
+                        f"http://{app_settings.APP_DOMAIN}/shipment/review?token={review_token}"
+                    )
+                case ShipmentStatus.cancelled:
+                    subject = "Your Order is Cancelled ❌"
+                    template_name = "mail_cancelled.html"
+                    context = {}
+                case _:
+                    # Don't send email for in_transit or unknown status
+                    return
+            
+            # Queue email notification via Celery
+            send_email_with_template_task.delay(
+                recipients=[client_email],
+                subject=subject,
+                context=context,
+                template_name=template_name,
+            )
+            logger.info(f"Queued status notification email to {client_email} for shipment {shipment.id}")
+        except Exception as e:
+            logger.error(f"Failed to queue status notification for shipment {shipment.id}: {e}", exc_info=True)
 

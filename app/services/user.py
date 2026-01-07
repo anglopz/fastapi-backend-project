@@ -1,11 +1,13 @@
 """
 User service base class providing common user operations
 """
+import logging
 from datetime import timedelta
 from typing import Optional
 from uuid import UUID
 
-from fastapi import BackgroundTasks, HTTPException, status
+from fastapi import HTTPException, status
+# Phase 3: BackgroundTasks removed, using Celery as primary method
 from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +16,16 @@ from app.database.models import User
 from app.utils import decode_url_safe_token, generate_access_token, generate_url_safe_token
 
 from .base import BaseService
+
+logger = logging.getLogger(__name__)
+
+# Try to import Celery tasks (optional - fallback to BackgroundTasks if not available)
+try:
+    from app.celery_app import send_email_with_template_task
+    CELERY_AVAILABLE = True
+except ImportError:
+    CELERY_AVAILABLE = False
+    logger.warning("Celery not available, falling back to BackgroundTasks")
 
 password_context = CryptContext(
     schemes=["bcrypt"],
@@ -29,12 +41,11 @@ class UserService(BaseService):
         model: type[User],
         session: AsyncSession,
         mail_client: Optional = None,
-        tasks: Optional[BackgroundTasks] = None,
     ):
         super().__init__(model, session)
         self.model = model
+        # Phase 3: BackgroundTasks removed, using Celery as primary method
         self.mail_client = mail_client
-        self.tasks = tasks
 
     async def _add_user(self, data: dict, router_prefix: str = "seller") -> User:
         """
@@ -43,48 +54,69 @@ class UserService(BaseService):
         Args:
             data: User data dictionary
             router_prefix: Router prefix for verification URL (e.g., "seller" or "partner")
+            
+        Raises:
+            HTTPException: If email already exists (409 Conflict) or other database error
         """
+        from sqlalchemy.exc import IntegrityError
+        
         user = self.model(
             **data,
             password_hash=password_context.hash(data["password"]),
             email_verified=False,  # New users start unverified
         )
-        user = await self._add(user)
         
-        # Send verification email if mail client available
-        if self.mail_client and self.tasks:
+        try:
+            user = await self._add(user)
+        except IntegrityError as e:
+            await self.session.rollback()
+            # Check if it's a unique constraint violation (duplicate email)
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            if "unique" in error_msg.lower() or "duplicate" in error_msg.lower() or "already exists" in error_msg.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Email {data.get('email', '')} already exists",
+                )
+            # Re-raise other integrity errors
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Database integrity error",
+            )
+        
+        # Send verification email if mail client available (Phase 3: Celery handles this)
+        if self.mail_client:
             await self._send_verification_email(user, router_prefix)
         
         return user
 
     async def _send_verification_email(self, user: User, router_prefix: str):
-        """Send email verification link (background task)"""
+        """Send email verification link via Celery"""
         from app.config import app_settings
-        from app.tasks import add_background_task
-        import logging
-        
-        logger = logging.getLogger(__name__)
         
         try:
             # Generate verification token
             token = generate_url_safe_token({"id": str(user.id)})
-            verification_url = f"http://{app_settings.APP_DOMAIN}/{router_prefix}/verify?token={token}"
+            # Remove leading slash from router_prefix if present to avoid double slashes
+            router_prefix_clean = router_prefix.lstrip('/')
+            verification_url = f"http://{app_settings.APP_DOMAIN}/{router_prefix_clean}/verify?token={token}"
             
-            # Send email in background
-            add_background_task(
-                self.tasks,
-                self.mail_client.send_email_with_template,
-                recipients=[user.email],
-                subject="Verify Your Account With FastShip",
-                template_name="mail_email_verify.html",
-                context={
-                    "username": user.name,
-                    "verification_url": verification_url,
-                },
-            )
-            logger.info(f"Verification email sent to {user.email}")
+            # Phase 3: Use Celery as primary method (BackgroundTasks removed)
+            if CELERY_AVAILABLE and self.mail_client:
+                # Use Celery task
+                send_email_with_template_task.delay(
+                    recipients=[user.email],
+                    subject="Verify Your Account With FastShip",
+                    template_name="mail_email_verify.html",
+                    context={
+                        "username": user.name,
+                        "verification_url": verification_url,
+                    },
+                )
+                logger.info(f"Queued verification email to {user.email}")
+            else:
+                logger.warning(f"Celery not available or mail_client missing - verification email not sent to {user.email}")
         except Exception as e:
-            logger.error(f"Failed to send verification email to {user.email}: {e}")
+            logger.error(f"Failed to send verification email to {user.email}: {e}", exc_info=True)
 
     async def verify_email(self, token: str) -> None:
         """
@@ -175,10 +207,6 @@ class UserService(BaseService):
             router_prefix: Router prefix for reset URL (e.g., "seller" or "partner")
         """
         from app.config import app_settings
-        from app.tasks import add_background_task
-        import logging
-        
-        logger = logging.getLogger(__name__)
         
         # Get user by email (don't reveal if user exists for security)
         user = await self._get_by_email(email)
@@ -190,13 +218,14 @@ class UserService(BaseService):
         try:
             # Generate password reset token with salt
             token = generate_url_safe_token({"id": str(user.id)}, salt="password-reset")
-            reset_url = f"http://{app_settings.APP_DOMAIN}/{router_prefix}/reset_password_form?token={token}"
+            # Remove leading slash from router_prefix if present to avoid double slashes
+            router_prefix_clean = router_prefix.lstrip('/')
+            reset_url = f"http://{app_settings.APP_DOMAIN}/{router_prefix_clean}/reset_password_form?token={token}"
             
-            # Send email in background
-            if self.mail_client and self.tasks:
-                add_background_task(
-                    self.tasks,
-                    self.mail_client.send_email_with_template,
+            # Phase 3: Use Celery as primary method (BackgroundTasks removed)
+            if CELERY_AVAILABLE and self.mail_client:
+                # Use Celery task
+                send_email_with_template_task.delay(
                     recipients=[user.email],
                     subject="FastShip Account Password Reset",
                     template_name="mail_password_reset.html",
@@ -205,7 +234,9 @@ class UserService(BaseService):
                         "reset_url": reset_url,
                     },
                 )
-                logger.info(f"Password reset email sent to {user.email}")
+                logger.info(f"Queued password reset email to {user.email}")
+            else:
+                logger.warning(f"Celery not available or mail_client missing - password reset email not sent to {user.email}")
         except Exception as e:
             logger.error(f"Failed to send password reset email to {user.email}: {e}")
 
