@@ -23,7 +23,7 @@ password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # OAuth2 schemes for different user types
-oauth2_scheme_seller = OAuth2PasswordBearer(tokenUrl="/sellers/token")
+oauth2_scheme_seller = OAuth2PasswordBearer(tokenUrl="/seller/token")
 oauth2_scheme_partner = OAuth2PasswordBearer(tokenUrl="/partner/token")
 
 # Backward compatibility alias

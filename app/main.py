@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
 from scalar_fastapi import get_scalar_api_reference
 
 from app.api.api_router import master_router
 from app.core.exception_handlers import setup_exception_handlers
+from app.core.security import oauth2_scheme_seller, oauth2_scheme_partner
 from app.database.redis import close_redis, get_redis
 from app.database.session import create_db_tables
 
@@ -38,6 +40,70 @@ app = FastAPI(
 )
 
 app.include_router(master_router)
+
+
+# Custom OpenAPI schema to include both OAuth2 schemes
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title="FastAPI Shipping API",
+        version="1.0.0",
+        description="API for shipping management",
+        routes=app.routes,
+    )
+    
+    # Replace the single OAuth2 scheme with both seller and partner schemes
+    openapi_schema["components"]["securitySchemes"] = {
+        "OAuth2PasswordBearerSeller": {
+            "type": "oauth2",
+            "flows": {
+                "password": {
+                    "tokenUrl": "/seller/token",
+                    "scopes": {}
+                }
+            }
+        },
+        "OAuth2PasswordBearerPartner": {
+            "type": "oauth2",
+            "flows": {
+                "password": {
+                    "tokenUrl": "/partner/token",
+                    "scopes": {}
+                }
+            }
+        }
+    }
+    
+    # Update endpoints to use the correct OAuth2 scheme based on path
+    # Seller endpoints use OAuth2PasswordBearerSeller
+    # Partner endpoints use OAuth2PasswordBearerPartner
+    for path, methods in openapi_schema.get("paths", {}).items():
+        for method, operation in methods.items():
+            if isinstance(operation, dict) and "security" in operation:
+                new_security = []
+                for sec_item in operation["security"]:
+                    # sec_item is a dict like {"OAuth2PasswordBearer": []}
+                    if isinstance(sec_item, dict) and "OAuth2PasswordBearer" in sec_item:
+                        # Determine which scheme to use based on path
+                        if "/seller" in path or (path.startswith("/shipment") and method.lower() == "post"):
+                            # Seller endpoints or shipment creation (requires seller)
+                            new_security.append({"OAuth2PasswordBearerSeller": []})
+                        elif "/partner" in path or (path.startswith("/shipment") and method.lower() == "patch"):
+                            # Partner endpoints or shipment update (requires partner)
+                            new_security.append({"OAuth2PasswordBearerPartner": []})
+                        else:
+                            # Default to seller for other endpoints
+                            new_security.append({"OAuth2PasswordBearerSeller": []})
+                    else:
+                        new_security.append(sec_item)
+                operation["security"] = new_security
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 
 ### Scalar API Documentation
