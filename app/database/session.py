@@ -12,8 +12,19 @@ engine = create_async_engine(
 
 
 async def create_db_tables():
+    """Create all database tables from SQLModel metadata"""
     async with engine.begin() as connection:
-        from .models import Shipment, ShipmentEvent, Seller, DeliveryPartner  # Import all models
+        # Import all models to ensure they're registered with SQLModel
+        from .models import (
+            Seller,
+            DeliveryPartner,
+            Shipment,
+            ShipmentEvent,
+            Location,
+            ServicableLocation,
+            Review,
+            Tag,
+        )
         await connection.run_sync(SQLModel.metadata.create_all)
 
 
