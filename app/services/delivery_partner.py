@@ -3,11 +3,12 @@ Delivery Partner service
 """
 from typing import Optional, Sequence
 
-from fastapi import HTTPException, status
+from typing import Optional, Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.api.schemas.delivery_partner import DeliveryPartnerCreate
+from app.core.exceptions import DeliveryPartnerNotAvailable
 from app.core.mail import MailClient
 from app.database.models import DeliveryPartner, Location, Shipment
 
@@ -86,10 +87,7 @@ class DeliveryPartnerService(UserService):
                 return partner
 
         # If no eligible partners found or partners have reached max handling capacity
-        raise HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE,
-            detail="No delivery partner available",
-        )
+        raise DeliveryPartnerNotAvailable("No delivery partner available")
 
     async def update(self, partner: DeliveryPartner):
         """Update a delivery partner"""

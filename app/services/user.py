@@ -6,12 +6,19 @@ from datetime import timedelta
 from typing import Optional
 from uuid import UUID
 
-from fastapi import HTTPException, status
 # Phase 3: BackgroundTasks removed, using Celery as primary method
 from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import (
+    AlreadyExistsError,
+    BadCredentials,
+    ClientNotVerified,
+    EntityNotFound,
+    InvalidToken,
+    ValidationError,
+)
 from app.database.models import User
 from app.utils import decode_url_safe_token, generate_access_token, generate_url_safe_token
 
@@ -56,7 +63,8 @@ class UserService(BaseService):
             router_prefix: Router prefix for verification URL (e.g., "seller" or "partner")
             
         Raises:
-            HTTPException: If email already exists (409 Conflict) or other database error
+            AlreadyExistsError: If email already exists
+            ValidationError: If database integrity error occurs
         """
         from sqlalchemy.exc import IntegrityError
         
@@ -73,15 +81,9 @@ class UserService(BaseService):
             # Check if it's a unique constraint violation (duplicate email)
             error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
             if "unique" in error_msg.lower() or "duplicate" in error_msg.lower() or "already exists" in error_msg.lower():
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Email {data.get('email', '')} already exists",
-                )
+                raise AlreadyExistsError(f"Email {data.get('email', '')} already exists")
             # Re-raise other integrity errors
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Database integrity error",
-            )
+            raise ValidationError("Database integrity error")
         
         # Send verification email if mail client available (Phase 3: Celery handles this)
         if self.mail_client:
@@ -126,25 +128,20 @@ class UserService(BaseService):
             token: URL-safe verification token
             
         Raises:
-            HTTPException: If token is invalid or user not found
+            InvalidToken: If token is invalid or expired
+            EntityNotFound: If user not found
         """
         # Decode token
         token_data = decode_url_safe_token(token)
         if not token_data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired verification token",
-            )
+            raise InvalidToken("Invalid or expired verification token")
         
         # Get user by ID from token
         user_id = UUID(token_data["id"])
         user = await self._get(user_id)
         
         if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found",
-            )
+            raise EntityNotFound("User not found")
         
         # Mark email as verified
         user.email_verified = True
@@ -175,17 +172,11 @@ class UserService(BaseService):
             password,
             user.password_hash,
         ):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Email or password is incorrect",
-            )
+            raise BadCredentials("Email or password is incorrect")
 
         # Phase 2: Check email verification (disabled in Phase 1)
         if require_verification and not user.email_verified:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Email not verified. Please check your email for verification link.",
-            )
+            raise ClientNotVerified("Email not verified. Please check your email for verification link.")
 
         return generate_access_token(
             data={

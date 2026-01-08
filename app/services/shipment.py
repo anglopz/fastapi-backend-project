@@ -6,11 +6,17 @@ from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
 
-from fastapi import HTTPException, status
 # Phase 3: BackgroundTasks removed, using Celery as primary method
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.shipment import ShipmentCreate, ShipmentUpdate
+from app.core.exceptions import (
+    AlreadyExistsError,
+    ClientNotAuthorized,
+    EntityNotFound,
+    InvalidToken,
+    ValidationError,
+)
 from app.core.mail import MailClient
 from app.database.models import DeliveryPartner, Review, Seller, Shipment, ShipmentStatus, Tag, TagName
 from app.database.redis import get_shipment_verification_code
@@ -92,24 +98,15 @@ class ShipmentService(BaseService):
         # Phase 1: Partner authorization check (optional - only if partner provided)
         if partner is not None:
             if shipment.delivery_partner_id != partner.id:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Not authorized",
-                )
+                raise ClientNotAuthorized("Not authorized")
         
         # Phase 2: Verification code is now required for delivery
         if shipment_update.status == ShipmentStatus.delivered:
             if not shipment_update.verification_code:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Verification code is required to mark shipment as delivered",
-                )
+                raise ValidationError("Verification code is required to mark shipment as delivered")
             stored_code = await get_shipment_verification_code(shipment.id)
             if not stored_code or stored_code != shipment_update.verification_code:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid or expired verification code",
-                )
+                raise InvalidToken("Invalid or expired verification code")
         
         old_status = shipment.status
         
@@ -157,22 +154,17 @@ class ShipmentService(BaseService):
             Updated Shipment with cancelled status
             
         Raises:
-            HTTPException: If shipment not found or seller not authorized
+            EntityNotFound: If shipment not found
+            ClientNotAuthorized: If seller not authorized
         """
         shipment = await self.get(id)
         
         if shipment is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Shipment not found",
-            )
+            raise EntityNotFound("Shipment not found")
         
         # Validate seller owns this shipment
         if shipment.seller_id != seller.id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Not authorized to cancel this shipment",
-            )
+            raise ClientNotAuthorized("Not authorized to cancel this shipment")
         
         # Update status to cancelled
         shipment.status = ShipmentStatus.cancelled
@@ -208,7 +200,9 @@ class ShipmentService(BaseService):
             comment: Optional review comment
             
         Raises:
-            HTTPException: If token is invalid, shipment not found, or review already exists
+            InvalidToken: If token is invalid or expired
+            EntityNotFound: If shipment not found
+            AlreadyExistsError: If review already exists
         """
         # Decode token (use "review" salt to match generation)
         token_data = decode_url_safe_token(
@@ -218,27 +212,18 @@ class ShipmentService(BaseService):
         )
         
         if not token_data:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired review token",
-            )
+            raise InvalidToken("Invalid or expired review token")
         
         shipment = await self.get(UUID(token_data["id"]))
         if not shipment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Shipment not found",
-            )
+            raise EntityNotFound("Shipment not found")
         
         # Refresh to load review relationship
         await self.session.refresh(shipment, ["review"])
         
         # Check if review already exists
         if shipment.review:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Review already submitted for this shipment",
-            )
+            raise AlreadyExistsError("Review already submitted for this shipment")
         
         # Create review
         new_review = Review(
@@ -262,14 +247,12 @@ class ShipmentService(BaseService):
             Updated Shipment with tag added
             
         Raises:
-            HTTPException: If shipment not found or tag already exists
+            EntityNotFound: If shipment not found
+            AlreadyExistsError: If tag already exists on shipment
         """
         shipment = await self.get(shipment_id)
         if not shipment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Shipment not found",
-            )
+            raise EntityNotFound("Shipment not found")
         
         # Refresh to load tags relationship
         await self.session.refresh(shipment, ["tags"])
@@ -289,10 +272,7 @@ class ShipmentService(BaseService):
         
         # Check if tag already exists on shipment
         if tag in shipment.tags:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Tag '{tag_name.value}' already exists on this shipment",
-            )
+            raise AlreadyExistsError(f"Tag '{tag_name.value}' already exists on this shipment")
         
         # Add tag to shipment
         shipment.tags.append(tag)
@@ -314,14 +294,11 @@ class ShipmentService(BaseService):
             Updated Shipment with tag removed
             
         Raises:
-            HTTPException: If shipment not found or tag doesn't exist
+            EntityNotFound: If shipment not found or tag doesn't exist
         """
         shipment = await self.get(shipment_id)
         if not shipment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Shipment not found",
-            )
+            raise EntityNotFound("Shipment not found")
         
         # Refresh to load tags relationship
         await self.session.refresh(shipment, ["tags"])
@@ -332,10 +309,7 @@ class ShipmentService(BaseService):
         )
         
         if not tag or tag not in shipment.tags:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tag '{tag_name.value}' not found on this shipment",
-            )
+            raise EntityNotFound(f"Tag '{tag_name.value}' not found on this shipment")
         
         # Remove tag from shipment
         shipment.tags.remove(tag)

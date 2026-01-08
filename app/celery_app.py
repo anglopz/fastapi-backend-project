@@ -11,7 +11,7 @@ from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 from pydantic import EmailStr
 from twilio.rest import Client as TwilioClient
 
-from app.config import db_settings, mail_settings, twilio_settings
+from app.config import db_settings, logging_settings, mail_settings, twilio_settings
 from app.utils import TEMPLATE_DIR
 
 logger = logging.getLogger(__name__)
@@ -195,4 +195,42 @@ def send_sms_task(
         logger.error(f"Failed to send SMS to {to}: {exc}", exc_info=True)
         # Retry on failure (up to max_retries)
         raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+
+
+@celery_app.task(bind=True, max_retries=2, default_retry_delay=10)
+def log_request_task(
+    self,
+    log_message: str,
+):
+    """
+    Log request details asynchronously via Celery.
+    
+    Section 27: API Middleware - Async Logging
+    
+    Args:
+        log_message: Log message in format "{method} {url} ({status_code}) {time_taken} s"
+        
+    Returns:
+        str: Success message
+    """
+    from pathlib import Path
+    
+    try:
+        # Ensure logs directory exists
+        log_dir = Path(logging_settings.LOG_DIR)
+        log_dir.mkdir(exist_ok=True)
+        
+        # Write to log file (Section 27 style)
+        log_file_path = log_dir / logging_settings.LOG_FILE
+        with open(log_file_path, "a") as file:
+            file.write(f"{log_message}\n")
+        
+        # Also log via Python logging module for better structure
+        logger.info(f"[Request] {log_message}")
+        
+        return "Request logged successfully"
+    except Exception as exc:
+        logger.error(f"Failed to log request: {exc}", exc_info=True)
+        # Retry on failure (up to max_retries)
+        raise self.retry(exc=exc, countdown=10 * (self.request.retries + 1))
 

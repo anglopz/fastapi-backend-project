@@ -4,9 +4,10 @@ API dependencies for dependency injection
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ClientNotAuthorized, InvalidToken
 from app.core.mail import MailClient, get_mail_client
 from app.core.security import oauth2_scheme_seller, oauth2_scheme_partner
 from app.database.models import DeliveryPartner, Seller
@@ -30,10 +31,7 @@ async def _get_access_token(token: str) -> dict:
 
     # Validate the token
     if data is None or await is_jti_blacklisted(data["jti"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired access token",
-        )
+        raise InvalidToken("Invalid or expired access token")
 
     return data
 
@@ -66,10 +64,7 @@ async def get_current_seller(
     )
 
     if seller is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authorized",
-        )
+        raise ClientNotAuthorized("Not authorized")
 
     return seller
 
@@ -86,10 +81,7 @@ async def get_current_partner(
     )
 
     if partner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authorized",
-        )
+        raise ClientNotAuthorized("Not authorized")
 
     return partner
 
