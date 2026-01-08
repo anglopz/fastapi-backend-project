@@ -81,12 +81,23 @@ class TwilioSettings(BaseSettings):
     model_config = _base_config
 
 
+class LoggingSettings(BaseSettings):
+    """Logging configuration settings"""
+    LOG_FILE: str = "file.log"
+    LOG_DIR: str = "logs"
+    ENABLE_REQUEST_LOGGING: bool = True
+    LOG_LEVEL: str = "INFO"
+
+    model_config = _base_config
+
+
 # New naming convention (db_settings, security_settings)
 app_settings = AppSettings()
 db_settings = DatabaseSettings()
 security_settings = SecuritySettings()
 mail_settings = MailSettings()
 twilio_settings = TwilioSettings()
+logging_settings = LoggingSettings()
 
 # Migration wrapper for backward compatibility
 # TODO: Remove this after all code is migrated to use db_settings
