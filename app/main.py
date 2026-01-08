@@ -6,6 +6,7 @@ from scalar_fastapi import get_scalar_api_reference
 
 from app.api.api_router import master_router
 from app.core.exception_handlers import setup_exception_handlers
+from app.core.middleware import request_logging_middleware
 from app.core.security import oauth2_scheme_seller, oauth2_scheme_partner
 from app.database.redis import close_redis, get_redis
 from app.database.session import create_db_tables
@@ -34,10 +35,63 @@ async def lifespan_handler(app: FastAPI):
     await close_redis()
 
 
+# Section 28: API Documentation - General Metadata
 app = FastAPI(
-    # Server start/stop listener
+    title="FastShip API",
+    description="""
+    FastShip is a comprehensive shipping management API that enables sellers and delivery partners 
+    to manage shipments efficiently.
+    
+    ## Features
+    
+    * **Seller Management**: Register, authenticate, and manage seller accounts
+    * **Delivery Partner Management**: Register and manage delivery partner accounts with serviceable locations
+    * **Shipment Management**: Create, track, and manage shipments with real-time status updates
+    * **Tagging System**: Add tags to shipments for special handling instructions
+    * **Location-Based Routing**: Automatic assignment of delivery partners based on destination
+    * **Real-time Notifications**: Email and SMS notifications for shipment status changes
+    * **Review System**: Collect customer reviews after delivery
+    
+    ## Authentication
+    
+    The API uses OAuth2 with JWT tokens. Two separate authentication schemes are available:
+    
+    * **Seller Authentication**: For seller endpoints (`/seller/*`)
+    * **Delivery Partner Authentication**: For delivery partner endpoints (`/partner/*`)
+    
+    ## Getting Started
+    
+    1. Register as a seller or delivery partner
+    2. Verify your email address
+    3. Login to get an access token
+    4. Use the token in the Authorization header: `Bearer <token>`
+    """,
+    version="1.0.0",
+    contact={
+        "name": "FastShip API Support",
+        "email": "support@fastship.com",
+        "url": "https://fastship.com/support",
+    },
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    servers=[
+        {
+            "url": "http://localhost:8000",
+            "description": "Development server",
+        },
+        {
+            "url": "https://api.fastship.com",
+            "description": "Production server",
+        },
+    ],
+    terms_of_service="https://fastship.com/terms",
     lifespan=lifespan_handler,
 )
+
+# Section 27: Add request logging middleware
+app.middleware("http")(request_logging_middleware)
 
 app.include_router(master_router)
 
@@ -47,11 +101,16 @@ def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
     
+    # Section 28: Enhanced OpenAPI schema with comprehensive metadata
     openapi_schema = get_openapi(
-        title="FastAPI Shipping API",
-        version="1.0.0",
-        description="API for shipping management",
+        title=app.title,
+        version=app.version,
+        description=app.description,
         routes=app.routes,
+        contact=app.contact,
+        license_info=app.license_info,
+        servers=app.servers,
+        terms_of_service=app.terms_of_service,
     )
     
     # Replace the single OAuth2 scheme with both seller and partner schemes

@@ -3,7 +3,7 @@ Seller router
 """
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from pydantic import EmailStr
@@ -26,7 +26,69 @@ templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 
 ### Register a new seller
-@router.post("/signup", response_model=SellerRead)
+@router.post(
+    "/signup",
+    response_model=SellerRead,
+    summary="Register a new seller account",
+    description="""
+    Register a new seller account in the FastShip system.
+    
+    **Process:**
+    1. Validates seller information (name, email, password)
+    2. Checks if email is already registered
+    3. Creates seller account with hashed password
+    4. Sends verification email to the provided email address
+    
+    **Note:** The seller must verify their email before they can login.
+    """,
+    response_description="Successfully registered seller account",
+    responses={
+        200: {
+            "description": "Seller registered successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": "123e4567-e89b-12d3-a456-426614174000",
+                        "name": "Acme Shipping Co.",
+                        "email": "seller@example.com"
+                    }
+                }
+            }
+        },
+        409: {
+            "description": "Email already exists",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "AlreadyExistsError",
+                        "message": "Email seller@example.com already exists",
+                        "status_code": 409
+                    }
+                }
+            }
+        },
+        422: {
+            "description": "Validation error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "ValidationError",
+                        "message": "Validation error",
+                        "details": [
+                            {
+                                "loc": ["body", "email"],
+                                "msg": "value is not a valid email address",
+                                "type": "value_error.email"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    operation_id="register_seller",
+    tags=["Seller"]
+)
 async def register_seller(
     seller: SellerCreate,
     service: SellerServiceDep,
@@ -37,7 +99,51 @@ async def register_seller(
 
 
 ### Login a seller
-@router.post("/token")
+@router.post(
+    "/token",
+    summary="Login and get access token",
+    description="""
+    Authenticate a seller and receive a JWT access token.
+    
+    **Authentication:**
+    - Uses OAuth2 password flow
+    - Requires valid email and password
+    - Email must be verified before login
+    
+    **Response:**
+    - Returns JWT access token
+    - Token expires after configured time
+    - Use token in Authorization header: `Bearer <token>`
+    """,
+    response_description="Successfully authenticated and token generated",
+    responses={
+        200: {
+            "description": "Login successful",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                        "token_type": "bearer"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Invalid credentials or email not verified",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "BadCredentials",
+                        "message": "Email or password is incorrect",
+                        "status_code": 401
+                    }
+                }
+            }
+        }
+    },
+    operation_id="login_seller",
+    tags=["Seller"]
+)
 async def login_seller(
     request_form: Annotated[OAuth2PasswordRequestForm, Depends()],
     service: SellerServiceDep,
@@ -51,7 +157,62 @@ async def login_seller(
 
 
 ### Verify seller email
-@router.get("/verify")
+@router.get(
+    "/verify",
+    summary="Verify seller email address",
+    description="""
+    Verify a seller's email address using the verification token sent via email.
+    
+    **Process:**
+    1. Validates the verification token
+    2. Marks the seller's email as verified
+    3. Seller can now login to the system
+    
+    **Token:**
+    - Sent via email after registration
+    - URL-safe token format
+    - Has expiration time
+    """,
+    response_description="Email verification result",
+    responses={
+        200: {
+            "description": "Email verified successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Email verified successfully"
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid or expired token",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "InvalidToken",
+                        "message": "Invalid or expired verification token",
+                        "status_code": 400
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "User not found",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "EntityNotFound",
+                        "message": "User not found",
+                        "status_code": 404
+                    }
+                }
+            }
+        }
+    },
+    operation_id="verify_seller_email",
+    tags=["Seller"]
+)
 async def verify_seller_email(
     token: str,
     service: SellerServiceDep,
@@ -62,7 +223,38 @@ async def verify_seller_email(
 
 
 ### Email Password Reset Link
-@router.get("/forgot_password")
+@router.get(
+    "/forgot_password",
+    summary="Request password reset link",
+    description="""
+    Request a password reset link to be sent via email.
+    
+    **Security:**
+    - Does not reveal if email exists (prevents email enumeration)
+    - Sends reset link only if email is registered
+    - Reset link expires after 24 hours
+    
+    **Process:**
+    1. Validates email format
+    2. If email exists, sends reset link via email
+    3. Returns success message (always, for security)
+    """,
+    response_description="Password reset request processed",
+    responses={
+        200: {
+            "description": "Password reset link sent (if email exists)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Check email for password reset link"
+                    }
+                }
+            }
+        }
+    },
+    operation_id="forgot_password",
+    tags=["Seller"]
+)
 async def forgot_password(
     email: EmailStr,
     service: SellerServiceDep,
@@ -107,7 +299,50 @@ async def reset_password(
 
 
 ### Logout a seller
-@router.get("/logout")
+@router.get(
+    "/logout",
+    summary="Logout and invalidate token",
+    description="""
+    Logout the current seller and invalidate their access token.
+    
+    **Process:**
+    1. Extracts JWT ID (jti) from the access token
+    2. Adds token to blacklist in Redis
+    3. Token can no longer be used for authentication
+    
+    **Security:**
+    - Requires valid authentication token
+    - Token is immediately invalidated
+    - Cannot be reused after logout
+    """,
+    response_description="Logout successful",
+    responses={
+        200: {
+            "description": "Successfully logged out",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Successfully logged out"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Invalid or expired token",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "InvalidToken",
+                        "message": "Invalid or expired access token",
+                        "status_code": 401
+                    }
+                }
+            }
+        }
+    },
+    operation_id="logout_seller",
+    tags=["Seller"]
+)
 async def logout_seller(
     token_data: Annotated[dict, Depends(get_seller_access_token)],
 ):
