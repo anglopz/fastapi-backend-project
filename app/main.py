@@ -14,7 +14,7 @@ from app.database.redis import close_redis, get_redis
 from app.database.session import create_db_tables
 
 
-async def wait_for_database(max_retries: int = 30, delay: float = 1.0):
+async def wait_for_database(max_retries: int = 10, delay: float = 2.0):
     """Wait for database to be ready with exponential backoff"""
     import asyncio
     from sqlalchemy import text
@@ -37,7 +37,7 @@ async def wait_for_database(max_retries: int = 30, delay: float = 1.0):
     return False
 
 
-async def wait_for_redis(max_retries: int = 10, delay: float = 1.0):
+async def wait_for_redis(max_retries: int = 5, delay: float = 2.0):
     """Wait for Redis to be ready with exponential backoff"""
     import asyncio
     from app.database.redis import get_redis
@@ -62,17 +62,28 @@ async def wait_for_redis(max_retries: int = 10, delay: float = 1.0):
 @asynccontextmanager
 async def lifespan_handler(app: FastAPI):
     # Startup
-    print("🚀 Starting application...")
+    import os
+    port = os.getenv("PORT", "8000")
+    print(f"🚀 Starting application on port {port}...")
 
-    # Wait for database to be ready
-    await wait_for_database()
+    # Wait for database to be ready (with shorter timeout for Render)
+    try:
+        await wait_for_database(max_retries=10, delay=2.0)
+    except Exception as e:
+        print(f"❌ Database connection failed: {e}")
+        print("⚠️  Application will start but database operations may fail")
     
     # Crear tablas de la base de datos
-    await create_db_tables()
-    print("✅ Database tables created/verified")
+    try:
+        await create_db_tables()
+        print("✅ Database tables created/verified")
+    except Exception as e:
+        print(f"⚠️  Could not create database tables: {e}")
 
     # Wait for Redis to be ready (non-blocking, continues if fails)
-    await wait_for_redis()
+    await wait_for_redis(max_retries=5, delay=2.0)
+    
+    print(f"✅ Application startup complete, listening on port {port}")
 
     yield
 
