@@ -30,7 +30,7 @@ services:
       - key: JWT_ALGORITHM
         value: HS256
       - key: EMAIL_MODE
-        value: production
+        value: sandbox
       - key: MAIL_USERNAME
         sync: false
       - key: MAIL_PASSWORD
