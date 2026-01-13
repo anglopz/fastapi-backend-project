@@ -14,4 +14,6 @@ COPY . /code
 ENV PYTHONPATH=/code
 
 # Arrancar la aplicación FastAPI
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Render uses dynamic PORT environment variable
+# Use shell form to allow environment variable substitution
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
