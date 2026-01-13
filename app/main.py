@@ -17,12 +17,13 @@ from app.database.session import create_db_tables
 async def wait_for_database(max_retries: int = 30, delay: float = 1.0):
     """Wait for database to be ready with exponential backoff"""
     import asyncio
+    from sqlalchemy import text
     from app.database.session import engine
     
     for attempt in range(max_retries):
         try:
             async with engine.begin() as conn:
-                await conn.execute("SELECT 1")
+                await conn.execute(text("SELECT 1"))
             print("✅ Database connection successful")
             return True
         except Exception as e:
