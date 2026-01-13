@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import HTMLResponse
 from scalar_fastapi import get_scalar_api_reference
 
 from app.api.api_router import master_router
@@ -239,6 +240,180 @@ def custom_openapi():
     return app.openapi_schema
 
 app.openapi = custom_openapi
+
+
+### Root Page
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def root():
+    """Root page with API information and links to documentation"""
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>FastShip API</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: #333;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }
+            .container {
+                background: white;
+                border-radius: 16px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                max-width: 800px;
+                width: 100%;
+                padding: 40px;
+                text-align: center;
+            }
+            h1 {
+                color: #667eea;
+                font-size: 2.5em;
+                margin-bottom: 10px;
+                font-weight: 700;
+            }
+            .subtitle {
+                color: #666;
+                font-size: 1.2em;
+                margin-bottom: 30px;
+            }
+            .description {
+                color: #555;
+                line-height: 1.6;
+                margin-bottom: 40px;
+                text-align: left;
+            }
+            .links {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 20px;
+                margin-top: 40px;
+            }
+            .link-card {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 25px;
+                border-radius: 12px;
+                text-decoration: none;
+                transition: transform 0.3s ease, box-shadow 0.3s ease;
+                display: block;
+            }
+            .link-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            }
+            .link-card h3 {
+                margin-bottom: 10px;
+                font-size: 1.3em;
+            }
+            .link-card p {
+                opacity: 0.9;
+                font-size: 0.9em;
+            }
+            .features {
+                text-align: left;
+                margin: 30px 0;
+                padding: 20px;
+                background: #f8f9fa;
+                border-radius: 8px;
+            }
+            .features h3 {
+                color: #667eea;
+                margin-bottom: 15px;
+            }
+            .features ul {
+                list-style: none;
+                padding-left: 0;
+            }
+            .features li {
+                padding: 8px 0;
+                padding-left: 25px;
+                position: relative;
+            }
+            .features li:before {
+                content: "✓";
+                position: absolute;
+                left: 0;
+                color: #667eea;
+                font-weight: bold;
+            }
+            .status {
+                display: inline-block;
+                background: #10b981;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 20px;
+                font-size: 0.9em;
+                margin-bottom: 20px;
+            }
+            .version {
+                color: #999;
+                font-size: 0.9em;
+                margin-top: 30px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🚀 FastShip API</h1>
+            <p class="subtitle">Comprehensive Shipping Management API</p>
+            <span class="status">● Live</span>
+            
+            <div class="description">
+                <p>FastShip is a comprehensive shipping management API that enables sellers and delivery partners to manage shipments efficiently.</p>
+            </div>
+            
+            <div class="features">
+                <h3>Key Features</h3>
+                <ul>
+                    <li>Seller & Delivery Partner Management</li>
+                    <li>Real-time Shipment Tracking</li>
+                    <li>Location-Based Routing</li>
+                    <li>Email & SMS Notifications</li>
+                    <li>Review System</li>
+                    <li>OAuth2 JWT Authentication</li>
+                </ul>
+            </div>
+            
+            <div class="links">
+                <a href="/docs" class="link-card">
+                    <h3>📚 Swagger UI</h3>
+                    <p>Interactive API documentation</p>
+                </a>
+                <a href="/scalar" class="link-card">
+                    <h3>✨ Scalar Docs</h3>
+                    <p>Modern API documentation</p>
+                </a>
+                <a href="/api/v1/health" class="link-card">
+                    <h3>💚 Health Check</h3>
+                    <p>API status endpoint</p>
+                </a>
+                <a href="/redoc" class="link-card">
+                    <h3>📖 ReDoc</h3>
+                    <p>Alternative documentation</p>
+                </a>
+            </div>
+            
+            <div class="version">
+                <p>Version 1.0.0 | <a href="https://fastship.com/support" style="color: #667eea;">Support</a></p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html_content
 
 
 ### Scalar API Documentation
