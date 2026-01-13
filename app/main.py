@@ -106,7 +106,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(master_router)
+# Include API router with /api/v1 prefix for versioning
+app.include_router(master_router, prefix="/api/v1")
 
 
 # Custom OpenAPI schema to include both OAuth2 schemes
@@ -187,10 +188,11 @@ def get_scalar_docs():
     )
 
 
-### Health Check Endpoint
+### Health Check Endpoint (available at root for backward compatibility)
+# Note: /api/v1/health is provided by the health router
 @app.get("/health")
 async def health_check():
-    """Health check endpoint with Redis status"""
+    """Health check endpoint with Redis status (root level for backward compatibility)"""
     redis_status = "disconnected"
     try:
         redis_client = await get_redis()

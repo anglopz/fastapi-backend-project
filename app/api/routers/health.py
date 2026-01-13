@@ -10,6 +10,49 @@ router = APIRouter(prefix="/health", tags=["Health"])
 
 
 @router.get(
+    "",
+    summary="API health check",
+    description="""
+    General health check endpoint for the API.
+    
+    Returns the overall health status of the API including Redis connection status.
+    """,
+    response_description="API health status",
+    responses={
+        200: {
+            "description": "API is healthy",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "healthy",
+                        "redis": "connected",
+                        "service": "FastAPI Backend"
+                    }
+                }
+            }
+        }
+    },
+    operation_id="health_check",
+)
+async def health_check():
+    """General health check endpoint with Redis status"""
+    from app.database.redis import get_redis
+    
+    redis_status = "disconnected"
+    try:
+        redis_client = await get_redis()
+        await redis_client.ping()
+        redis_status = "connected"
+    except Exception:
+        redis_status = "disconnected"
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": "healthy", "redis": redis_status, "service": "FastAPI Backend"}
+    )
+
+
+@router.get(
     "/email",
     summary="Verify SMTP email connection",
     description="""
