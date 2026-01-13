@@ -13,6 +13,10 @@ This directory contains comprehensive documentation for the FastShip API project
 ## Additional Documentation
 
 - **[sprints/](sprints/)** - Sprint summaries and implementation reports
+  - [Sections 20-23 Summary](sprints/sections_20-23_summary.md)
+  - [Sections 24-30 Summary](sprints/sections_24-30_summary.md)
+  - [Frontend Integration & WSL2 Fixes](sprints/frontend_wsl2_fixes_summary.md)
+  - [Frontend & React.js Integration Fixes](sprints/frontend_reactjs_integration_fixes.md)
 - **[../README.md](../README.md)** - Project overview and quick start
 - **[../CHANGELOG.md](../CHANGELOG.md)** - Version history
 - **[../ROADMAP.md](../ROADMAP.md)** - Future plans and roadmap
@@ -20,4 +24,4 @@ This directory contains comprehensive documentation for the FastShip API project
 
 ---
 
-**Last Updated**: January 8, 2026
+**Last Updated**: January 12, 2026

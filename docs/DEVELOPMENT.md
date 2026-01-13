@@ -4,7 +4,8 @@
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.11+ (for backend)
+- Node.js 20+ (for frontend)
 - Docker & Docker Compose
 - Git
 - Code editor (VS Code recommended)
@@ -24,6 +25,8 @@ docker-compose up -d
 
 # Verify setup
 curl http://localhost:8000/health
+
+# Frontend will be available at http://localhost:5173
 ```
 
 ## Development Environment
@@ -69,7 +72,7 @@ docker-compose down
 
 ```
 app/
-├── app/
+├── app/                  # Backend (FastAPI)
 │   ├── api/              # API layer
 │   │   ├── routers/      # Route handlers
 │   │   ├── schemas/      # Pydantic models
@@ -88,6 +91,15 @@ app/
 │   │   ├── user.py       # UserService
 │   │   └── ...
 │   └── celery_app.py     # Celery tasks
+├── frontend/             # Frontend (React + TypeScript)
+│   ├── app/              # Application code
+│   │   ├── components/   # React components
+│   │   ├── routes/       # Page routes
+│   │   ├── contexts/     # React contexts
+│   │   └── lib/          # Utilities & API client
+│   ├── public/           # Static assets
+│   ├── package.json      # Dependencies
+│   └── vite.config.ts    # Vite configuration
 ├── tests/                # Test suite
 ├── migrations/           # Alembic migrations
 ├── scripts/             # Utility scripts
