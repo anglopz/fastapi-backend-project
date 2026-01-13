@@ -36,13 +36,16 @@ class MailClient:
     def fastmail(self) -> FastMail:
         """Lazy initialization of FastMail client with connection pooling"""
         if self._fastmail is None:
+            # Get SMTP config based on EMAIL_MODE
+            smtp_config = mail_settings.get_smtp_config()
+            
             # FastMail handles connection pooling internally
             config = ConnectionConfig(
-                MAIL_USERNAME=mail_settings.MAIL_USERNAME,
-                MAIL_PASSWORD=mail_settings.MAIL_PASSWORD,
+                MAIL_USERNAME=smtp_config["MAIL_USERNAME"],
+                MAIL_PASSWORD=smtp_config["MAIL_PASSWORD"],
                 MAIL_FROM=mail_settings.MAIL_FROM,
-                MAIL_PORT=mail_settings.MAIL_PORT,
-                MAIL_SERVER=mail_settings.MAIL_SERVER,
+                MAIL_PORT=smtp_config["MAIL_PORT"],
+                MAIL_SERVER=smtp_config["MAIL_SERVER"],
                 MAIL_FROM_NAME=mail_settings.MAIL_FROM_NAME,
                 MAIL_STARTTLS=mail_settings.MAIL_STARTTLS,
                 MAIL_SSL_TLS=mail_settings.MAIL_SSL_TLS,
@@ -52,6 +55,83 @@ class MailClient:
             )
             self._fastmail = FastMail(config)
         return self._fastmail
+    
+    async def verify_connection(self) -> dict:
+        """
+        Verify SMTP connection by attempting to connect and authenticate.
+        
+        Returns:
+            Dictionary with connection status and details
+        """
+        try:
+            smtp_config = mail_settings.get_smtp_config()
+            
+            # Validate required settings
+            if not smtp_config["MAIL_USERNAME"] or not smtp_config["MAIL_PASSWORD"]:
+                return {
+                    "status": "error",
+                    "message": "SMTP credentials not configured",
+                    "mode": mail_settings.EMAIL_MODE,
+                    "server": smtp_config.get("MAIL_SERVER", "unknown"),
+                    "port": smtp_config.get("MAIL_PORT", "unknown"),
+                }
+            
+            # Try to create a test connection
+            test_config = ConnectionConfig(
+                MAIL_USERNAME=smtp_config["MAIL_USERNAME"],
+                MAIL_PASSWORD=smtp_config["MAIL_PASSWORD"],
+                MAIL_PORT=smtp_config["MAIL_PORT"],
+                MAIL_SERVER=smtp_config["MAIL_SERVER"],
+                MAIL_STARTTLS=mail_settings.MAIL_STARTTLS,
+                MAIL_SSL_TLS=mail_settings.MAIL_SSL_TLS,
+                USE_CREDENTIALS=mail_settings.USE_CREDENTIALS,
+                VALIDATE_CERTS=mail_settings.VALIDATE_CERTS,
+            )
+            
+            # Create a temporary FastMail instance to test connection
+            test_fastmail = FastMail(test_config)
+            
+            # Try to send a test message to verify connection
+            # Use a test recipient that won't actually receive (or use Mailtrap's test inbox)
+            test_message = MessageSchema(
+                recipients=["test@example.com"],  # Dummy recipient for connection test
+                subject="Connection Test",
+                body="This is a connection test",
+                subtype=MessageType.plain,
+            )
+            
+            # Attempt to send (this will verify connection and authentication)
+            # Note: In sandbox mode (Mailtrap), this will work but email won't be delivered
+            # In production, we should use a real test email or skip actual sending
+            try:
+                await test_fastmail.send_message(test_message)
+                logger.info("SMTP connection test successful")
+            except Exception as send_error:
+                # If sending fails but it's a delivery error (not auth/connection), consider it a success
+                error_str = str(send_error).lower()
+                if "authentication" in error_str or "connection" in error_str or "refused" in error_str:
+                    raise  # Re-raise auth/connection errors
+                # Delivery errors (like invalid recipient) mean connection worked
+                logger.info(f"SMTP connection verified (delivery error expected): {send_error}")
+            
+            return {
+                "status": "success",
+                "message": "SMTP connection verified",
+                "mode": mail_settings.EMAIL_MODE,
+                "server": smtp_config["MAIL_SERVER"],
+                "port": smtp_config["MAIL_PORT"],
+                "username": smtp_config["MAIL_USERNAME"][:3] + "***" if len(smtp_config["MAIL_USERNAME"]) > 3 else "***",
+            }
+        except Exception as e:
+            logger.error(f"SMTP connection verification failed: {e}")
+            smtp_config = mail_settings.get_smtp_config()
+            return {
+                "status": "error",
+                "message": f"SMTP connection failed: {str(e)}",
+                "mode": mail_settings.EMAIL_MODE,
+                "server": smtp_config.get("MAIL_SERVER", "unknown"),
+                "port": smtp_config.get("MAIL_PORT", "unknown"),
+            }
     
     @property
     def template_env(self) -> Environment:
