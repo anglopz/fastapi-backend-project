@@ -25,12 +25,16 @@ class SecuritySettings(BaseSettings):
 
 
 class DatabaseSettings(BaseSettings):
+    # Support both DATABASE_URL (from Render) and individual POSTGRES_* settings
+    DATABASE_URL: str = ""
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "password"
     POSTGRES_DB: str = "fastapi_db"
     
+    # Support both REDIS_URL (from Render) and individual REDIS_* settings
+    REDIS_URL: str = ""
     REDIS_HOST: str = "localhost"
     REDIS_PORT: str = "6379"
 
@@ -40,21 +44,52 @@ class DatabaseSettings(BaseSettings):
     def POSTGRES_URL(self) -> str:
         """Return a Postgres async URL.
         
-        PostgreSQL is now required (no SQLite fallback).
-        Uses default values if not set in environment.
+        Prioritizes DATABASE_URL if provided (e.g., from Render).
+        Otherwise builds from individual POSTGRES_* settings.
+        Converts postgresql:// to postgresql+asyncpg:// if needed.
         """
+        if self.DATABASE_URL:
+            # Convert postgresql:// to postgresql+asyncpg:// if needed
+            if self.DATABASE_URL.startswith("postgresql://"):
+                return self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+            elif self.DATABASE_URL.startswith("postgresql+asyncpg://"):
+                return self.DATABASE_URL
+            else:
+                # Already in correct format or needs conversion
+                return self.DATABASE_URL
+        
+        # Build from individual settings
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@"
             f"{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
     
-    @property
-    def REDIS_URL(self) -> str:
-        """Return Redis URL for Celery broker/backend.
+    def get_redis_connection_params(self) -> dict:
+        """Get Redis connection parameters.
         
-        Uses database 2 for Celery to avoid conflicts with other Redis usage.
+        Prioritizes REDIS_URL if provided (e.g., from Render).
+        Otherwise uses individual REDIS_HOST/REDIS_PORT settings.
+        
+        Returns:
+            dict with 'host', 'port', and optionally 'url' keys
         """
-        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/2"
+        if self.REDIS_URL:
+            # Parse REDIS_URL (format: redis://host:port/db)
+            from urllib.parse import urlparse
+            parsed = urlparse(self.REDIS_URL)
+            return {
+                "url": self.REDIS_URL,
+                "host": parsed.hostname or "localhost",
+                "port": parsed.port or 6379,
+                "db": int(parsed.path.lstrip("/")) if parsed.path else 1,
+            }
+        
+        # Use individual settings
+        return {
+            "host": self.REDIS_HOST,
+            "port": int(self.REDIS_PORT),
+            "db": 1,
+        }
 
 
 class MailSettings(BaseSettings):

@@ -20,12 +20,27 @@ async def get_redis():
     global _cache_client
     if _cache_client is None:
         from redis.asyncio import Redis as AsyncRedis
-        _cache_client = AsyncRedis(
-            host=db_settings.REDIS_HOST,
-            port=int(db_settings.REDIS_PORT),
-            db=1,  # Use different DB for cache
-            decode_responses=True,
-        )
+        from redis.asyncio.connection import ConnectionPool
+        
+        # Get connection params (supports both REDIS_URL and individual settings)
+        params = db_settings.get_redis_connection_params()
+        
+        # Use URL if available, otherwise use host/port
+        if "url" in params:
+            # Parse URL and create connection pool
+            pool = ConnectionPool.from_url(
+                params["url"],
+                db=params.get("db", 1),
+                decode_responses=True,
+            )
+            _cache_client = AsyncRedis(connection_pool=pool)
+        else:
+            _cache_client = AsyncRedis(
+                host=params["host"],
+                port=params["port"],
+                db=params.get("db", 1),
+                decode_responses=True,
+            )
         try:
             await _cache_client.ping()
             print("✅ Connected to Redis (cache)")
@@ -39,12 +54,27 @@ async def get_token_blacklist() -> Redis:
     """Get Redis client for token blacklist (lazy initialization)"""
     global _token_blacklist
     if _token_blacklist is None:
-        _token_blacklist = Redis(
-            host=db_settings.REDIS_HOST,
-            port=int(db_settings.REDIS_PORT),
-            db=0,
-            decode_responses=True,
-        )
+        from redis.asyncio.connection import ConnectionPool
+        
+        # Get connection params (supports both REDIS_URL and individual settings)
+        params = db_settings.get_redis_connection_params()
+        
+        # Use URL if available, otherwise use host/port
+        if "url" in params:
+            # Parse URL and create connection pool (use db=0 for blacklist)
+            pool = ConnectionPool.from_url(
+                params["url"],
+                db=0,  # Token blacklist uses db=0
+                decode_responses=True,
+            )
+            _token_blacklist = Redis(connection_pool=pool)
+        else:
+            _token_blacklist = Redis(
+                host=params["host"],
+                port=params["port"],
+                db=0,  # Token blacklist uses db=0
+                decode_responses=True,
+            )
         try:
             await _token_blacklist.ping()
         except Exception as e:
