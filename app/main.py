@@ -14,21 +14,64 @@ from app.database.redis import close_redis, get_redis
 from app.database.session import create_db_tables
 
 
+async def wait_for_database(max_retries: int = 30, delay: float = 1.0):
+    """Wait for database to be ready with exponential backoff"""
+    import asyncio
+    from app.database.session import engine
+    
+    for attempt in range(max_retries):
+        try:
+            async with engine.begin() as conn:
+                await conn.execute("SELECT 1")
+            print("✅ Database connection successful")
+            return True
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = delay * (2 ** min(attempt, 5))  # Exponential backoff, max 32s
+                print(f"⏳ Waiting for database... (attempt {attempt + 1}/{max_retries}) - {e}")
+                await asyncio.sleep(wait_time)
+            else:
+                print(f"❌ Database connection failed after {max_retries} attempts: {e}")
+                raise
+    return False
+
+
+async def wait_for_redis(max_retries: int = 10, delay: float = 1.0):
+    """Wait for Redis to be ready with exponential backoff"""
+    import asyncio
+    from app.database.redis import get_redis
+    
+    for attempt in range(max_retries):
+        try:
+            await get_redis()
+            print("✅ Redis connection successful")
+            return True
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = delay * (2 ** min(attempt, 3))  # Exponential backoff, max 8s
+                print(f"⏳ Waiting for Redis... (attempt {attempt + 1}/{max_retries}) - {e}")
+                await asyncio.sleep(wait_time)
+            else:
+                print(f"⚠️  Redis connection failed after {max_retries} attempts: {e}")
+                print("⚠️  Application will continue without Redis caching")
+                return False
+    return False
+
+
 @asynccontextmanager
 async def lifespan_handler(app: FastAPI):
     # Startup
     print("🚀 Starting application...")
 
+    # Wait for database to be ready
+    await wait_for_database()
+    
     # Crear tablas de la base de datos
     await create_db_tables()
+    print("✅ Database tables created/verified")
 
-    # Inicializar Redis (con manejo de errores)
-    try:
-        await get_redis()
-        print("✅ Redis connected successfully")
-    except Exception as e:
-        print(f"⚠️  Redis connection failed: {e}")
-        print("⚠️  Application will continue without Redis caching")
+    # Wait for Redis to be ready (non-blocking, continues if fails)
+    await wait_for_redis()
 
     yield
 
