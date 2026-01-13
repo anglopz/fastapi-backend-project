@@ -14,9 +14,14 @@ from app.utils import TEMPLATE_DIR
 
 from ..dependencies import (
     SellerServiceDep,
+    SellerDep,
+    ShipmentServiceDep,
     get_seller_access_token,
 )
 from ..schemas.seller import SellerCreate, SellerRead
+from ..schemas.shipment import ShipmentRead
+from sqlmodel import select
+from app.database.models import Shipment
 
 
 router = APIRouter(prefix="/seller", tags=["Seller"])
@@ -271,13 +276,13 @@ async def get_reset_password_form(
     request: Request,
     token: str,
 ):
-    """Display password reset form (HTML response)"""
-    return templates.TemplateResponse(
-        request=request,
-        name="password/reset.html",
-        context={
-            "reset_url": f"http://{app_settings.APP_DOMAIN}{router.prefix}/reset_password?token={token}"
-        }
+    """Redirect to frontend password reset form"""
+    from fastapi.responses import RedirectResponse
+    # Redirect to frontend reset password page with token
+    frontend_url = app_settings.FRONTEND_URL
+    return RedirectResponse(
+        url=f"{frontend_url}/seller/reset-password?token={token}",
+        status_code=302
     )
 
 
@@ -349,3 +354,130 @@ async def logout_seller(
     """Logout and invalidate the current token"""
     await add_jti_to_blacklist(token_data["jti"])
     return {"detail": "Successfully logged out"}
+
+
+### Get all shipments for the authenticated seller
+@router.get(
+    "/shipments",
+    response_model=list[ShipmentRead],
+    summary="Get all shipments for seller",
+    description="""
+    Retrieve all shipments created by the authenticated seller.
+    
+    **Returns:**
+    - List of all shipments created by the seller
+    - Includes shipment details (content, weight, destination, status)
+    - Includes client contact information
+    - Includes estimated delivery dates
+    - Includes associated tags (if any)
+    
+    **Access:**
+    - Requires authentication (JWT token)
+    - Only returns shipments created by the authenticated seller
+    """,
+    response_description="List of seller's shipments",
+    responses={
+        200: {
+            "description": "List of shipments",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "id": "123e4567-e89b-12d3-a456-426614174000",
+                            "content": "Electronics",
+                            "weight": 5.5,
+                            "destination": 887,
+                            "status": "in_transit",
+                            "estimated_delivery": "2026-01-10T12:00:00",
+                            "client_contact_email": "client@example.com",
+                            "client_contact_phone": "+34601539533",
+                            "tags": ["express", "fragile"]
+                        }
+                    ]
+                }
+            }
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "InvalidToken",
+                        "message": "Invalid or expired access token",
+                        "status_code": 401
+                    }
+                }
+            }
+        }
+    },
+    operation_id="get_seller_shipments",
+    tags=["Seller"]
+)
+async def get_seller_shipments(
+    seller: SellerDep,
+    shipment_service: ShipmentServiceDep,
+):
+    """Get all shipments for the authenticated seller"""
+    # Query all shipments for this seller
+    statement = select(Shipment).where(Shipment.seller_id == seller.id)
+    result = await shipment_service.session.execute(statement)
+    shipments = result.scalars().all()
+    
+    # Refresh each shipment to load relationships (tags, events)
+    for shipment in shipments:
+        await shipment_service.session.refresh(shipment, ["tags", "events"])
+    
+    return shipments
+
+
+### Get current seller profile
+@router.get(
+    "/me",
+    response_model=SellerRead,
+    summary="Get current seller profile",
+    description="""
+    Get the profile information of the currently authenticated seller.
+    
+    **Returns:**
+    - Seller ID, name, and email
+    - Account information
+    
+    **Access:**
+    - Requires authentication (JWT token)
+    - Returns the seller associated with the current token
+    """,
+    response_description="Current seller profile",
+    responses={
+        200: {
+            "description": "Seller profile",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": "123e4567-e89b-12d3-a456-426614174000",
+                        "name": "Acme Shipping Co.",
+                        "email": "seller@example.com"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "InvalidToken",
+                        "message": "Invalid or expired access token",
+                        "status_code": 401
+                    }
+                }
+            }
+        }
+    },
+    operation_id="get_seller_profile",
+    tags=["Seller"]
+)
+async def get_seller_profile(
+    seller: SellerDep,
+):
+    """Get the current authenticated seller's profile"""
+    return seller

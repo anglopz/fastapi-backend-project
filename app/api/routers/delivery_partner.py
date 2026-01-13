@@ -16,6 +16,7 @@ from app.utils import TEMPLATE_DIR
 from ..dependencies import (
     DeliveryPartnerDep,
     DeliveryPartnerServiceDep,
+    ShipmentServiceDep,
     get_partner_access_token,
 )
 from ..schemas.delivery_partner import (
@@ -23,6 +24,9 @@ from ..schemas.delivery_partner import (
     DeliveryPartnerRead,
     DeliveryPartnerUpdate,
 )
+from ..schemas.shipment import ShipmentRead
+from sqlmodel import select
+from app.database.models import Shipment
 
 router = APIRouter(prefix="/partner", tags=["Delivery Partner"])
 
@@ -144,13 +148,13 @@ async def get_reset_password_form(
     request: Request,
     token: str,
 ):
-    """Display password reset form (HTML response)"""
-    return templates.TemplateResponse(
-        request=request,
-        name="password/reset.html",
-        context={
-            "reset_url": f"http://{app_settings.APP_DOMAIN}{router.prefix}/reset_password?token={token}"
-        }
+    """Redirect to frontend password reset form"""
+    from fastapi.responses import RedirectResponse
+    # Redirect to frontend reset password page with token
+    frontend_url = app_settings.FRONTEND_URL
+    return RedirectResponse(
+        url=f"{frontend_url}/partner/reset-password?token={token}",
+        status_code=302
     )
 
 
@@ -343,4 +347,137 @@ async def logout_delivery_partner(
     """Logout and invalidate the current token"""
     await add_jti_to_blacklist(token_data["jti"])
     return {"detail": "Successfully logged out"}
+
+
+### Get all shipments for the authenticated delivery partner
+@router.get(
+    "/shipments",
+    response_model=list[ShipmentRead],
+    summary="Get all shipments for delivery partner",
+    description="""
+    Retrieve all shipments assigned to the authenticated delivery partner.
+    
+    **Returns:**
+    - List of all shipments assigned to the partner
+    - Includes shipment details (content, weight, destination, status)
+    - Includes client contact information
+    - Includes estimated delivery dates
+    - Includes associated tags (if any)
+    
+    **Access:**
+    - Requires authentication (JWT token)
+    - Only returns shipments assigned to the authenticated partner
+    """,
+    response_description="List of partner's shipments",
+    responses={
+        200: {
+            "description": "List of shipments",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "id": "123e4567-e89b-12d3-a456-426614174000",
+                            "content": "Electronics",
+                            "weight": 5.5,
+                            "destination": 887,
+                            "status": "in_transit",
+                            "estimated_delivery": "2026-01-10T12:00:00",
+                            "client_contact_email": "client@example.com",
+                            "client_contact_phone": "+34601539533",
+                            "tags": ["express", "fragile"]
+                        }
+                    ]
+                }
+            }
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "InvalidToken",
+                        "message": "Invalid or expired access token",
+                        "status_code": 401
+                    }
+                }
+            }
+        }
+    },
+    operation_id="get_partner_shipments",
+    tags=["Delivery Partner"]
+)
+async def get_partner_shipments(
+    partner: DeliveryPartnerDep,
+    shipment_service: ShipmentServiceDep,
+):
+    """Get all shipments assigned to the authenticated delivery partner"""
+    # Query all shipments assigned to this partner
+    statement = select(Shipment).where(Shipment.delivery_partner_id == partner.id)
+    result = await shipment_service.session.execute(statement)
+    shipments = result.scalars().all()
+    
+    # Refresh each shipment to load relationships (tags, events)
+    for shipment in shipments:
+        await shipment_service.session.refresh(shipment, ["tags", "events"])
+    
+    return shipments
+
+
+### Get current delivery partner profile
+@router.get(
+    "/me",
+    response_model=DeliveryPartnerRead,
+    summary="Get current delivery partner profile",
+    description="""
+    Get the profile information of the currently authenticated delivery partner.
+    
+    **Returns:**
+    - Partner ID, name, email
+    - Serviceable locations
+    - Maximum handling capacity
+    
+    **Access:**
+    - Requires authentication (JWT token)
+    - Returns the partner associated with the current token
+    """,
+    response_description="Current delivery partner profile",
+    responses={
+        200: {
+            "description": "Delivery partner profile",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": "123e4567-e89b-12d3-a456-426614174000",
+                        "name": "FastDelivery Co.",
+                        "email": "partner@example.com",
+                        "servicable_locations": [887, 8020, 28001],
+                        "max_handling_capacity": 50
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "InvalidToken",
+                        "message": "Invalid or expired access token",
+                        "status_code": 401
+                    }
+                }
+            }
+        }
+    },
+    operation_id="get_delivery_partner_profile",
+    tags=["Delivery Partner"]
+)
+async def get_delivery_partner_profile(
+    partner: DeliveryPartnerDep,
+    service: DeliveryPartnerServiceDep,
+):
+    """Get the current authenticated delivery partner's profile"""
+    # Refresh to ensure servicable_locations is loaded
+    await service.session.refresh(partner, ["servicable_locations"])
+    return partner
 
