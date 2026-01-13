@@ -85,8 +85,8 @@ async def get_shipment(id: UUID, service: ShipmentServiceDep):
     if shipment is None:
         raise EntityNotFound("Given id doesn't exist!")
     
-    # Refresh to load tags relationship
-    await service.session.refresh(shipment, ["tags"])
+    # Refresh to load tags and events relationships
+    await service.session.refresh(shipment, ["tags", "events"])
 
     return shipment
 
@@ -251,6 +251,31 @@ async def submit_shipment(
                 }
             }
         },
+        422: {
+            "description": "Validation error - shipment cannot be updated",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "cancelled": {
+                            "summary": "Shipment is cancelled",
+                            "value": {
+                                "error": "ValidationError",
+                                "message": "Cannot update a cancelled shipment",
+                                "status_code": 422
+                            }
+                        },
+                        "delivered": {
+                            "summary": "Shipment is delivered",
+                            "value": {
+                                "error": "ValidationError",
+                                "message": "Cannot update a delivered shipment",
+                                "status_code": 422
+                            }
+                        }
+                    }
+                }
+            }
+        },
         401: {
             "description": "Not authorized or invalid token",
             "content": {
@@ -300,7 +325,12 @@ async def update_shipment(
 
     # Phase 3: Celery tasks are used directly by services (no BackgroundTasks needed)
     # Update shipment with event creation (partner passed for authorization check)
-    return await service.update(shipment, shipment_update, partner=partner)
+    updated_shipment = await service.update(shipment, shipment_update, partner=partner)
+    
+    # Ensure events are loaded before returning
+    await service.session.refresh(updated_shipment, ["events", "tags"])
+    
+    return updated_shipment
 
 
 ### Get shipment timeline

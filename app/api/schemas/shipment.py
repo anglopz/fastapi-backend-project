@@ -82,6 +82,19 @@ class ShipmentRead(BaseShipment):
         default=None,
         description="List of tags associated with the shipment for special handling instructions (e.g., express, fragile, temperature_controlled)"
     )
+    timeline: Optional[list[dict]] = Field(
+        default=None,
+        description="List of shipment events (timeline) showing status changes and location updates",
+        example=[
+            {
+                "id": "123e4567-e89b-12d3-a456-426614174000",
+                "created_at": "2026-01-10T10:00:00",
+                "location": 887,
+                "status": "in_transit",
+                "description": "Package is in transit"
+            }
+        ]
+    )
     
     @field_validator('tags', mode='before')
     @classmethod
@@ -95,6 +108,29 @@ class ShipmentRead(BaseShipment):
             if v and hasattr(v[0], 'name'):
                 return [tag.name for tag in v]
             # If already TagName enum values, return as is
+            return v
+        return v
+    
+    @field_validator('timeline', mode='before')
+    @classmethod
+    def extract_timeline_events(cls, v):
+        """Extract timeline events from ShipmentEvent objects if needed"""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            # If list contains ShipmentEvent objects, convert to dict
+            if v and hasattr(v[0], 'id'):
+                return [
+                    {
+                        "id": str(event.id),
+                        "created_at": event.created_at.isoformat() if hasattr(event.created_at, 'isoformat') else str(event.created_at),
+                        "location": event.location,
+                        "status": event.status.value if hasattr(event.status, 'value') else str(event.status),
+                        "description": event.description
+                    }
+                    for event in v
+                ]
+            # If already dicts, return as is
             return v
         return v
 

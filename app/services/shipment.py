@@ -94,7 +94,16 @@ class ShipmentService(BaseService):
             
         Returns:
             Updated Shipment
+            
+        Raises:
+            ValidationError: If shipment is cancelled or delivered (cannot be updated)
         """
+        # Validation: Cannot update cancelled or delivered shipments
+        if shipment.status == ShipmentStatus.cancelled:
+            raise ValidationError("Cannot update a cancelled shipment")
+        if shipment.status == ShipmentStatus.delivered:
+            raise ValidationError("Cannot update a delivered shipment")
+        
         # Phase 1: Partner authorization check (optional - only if partner provided)
         if partner is not None:
             if shipment.delivery_partner_id != partner.id:
@@ -130,15 +139,20 @@ class ShipmentService(BaseService):
         updated_shipment = await self._update(shipment)
         
         # Create event if status or location changed
-        if shipment_update.status or shipment_update.location:
+        # Note: location is stored in events, not in shipment model
+        status_changed = shipment_update.status and shipment_update.status != old_status
+        location_provided = shipment_update.location is not None
+        
+        if status_changed or location_provided:
             await self.event_service.create_event(
                 shipment=updated_shipment,
                 status=shipment_update.status or old_status,
                 location=shipment_update.location,
                 description=shipment_update.description,
             )
-            # Refresh to load new event
-            await self.session.refresh(updated_shipment, ["events"])
+        
+        # Always refresh events before returning to ensure timeline is loaded
+        await self.session.refresh(updated_shipment, ["events", "tags"])
         
         return updated_shipment
 

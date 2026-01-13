@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from scalar_fastapi import get_scalar_api_reference
 
 from app.api.api_router import master_router
+from app.config import cors_settings
 from app.core.exception_handlers import setup_exception_handlers
 from app.core.middleware import request_logging_middleware
 from app.core.security import oauth2_scheme_seller, oauth2_scheme_partner
@@ -92,6 +94,17 @@ app = FastAPI(
 
 # Section 27: Add request logging middleware
 app.middleware("http")(request_logging_middleware)
+
+# Section 31-32: Add CORS middleware for frontend integration
+# CORS origins are configured via CORS_ORIGINS environment variable
+# Default includes common development ports, override in production
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(master_router)
 

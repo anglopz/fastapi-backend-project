@@ -24,21 +24,23 @@ _fastmail_instance = None
 def get_fastmail():
     """Get or create FastMail instance (singleton)"""
     global _fastmail_instance
-    if _fastmail_instance is None:
-        config = ConnectionConfig(
-            MAIL_USERNAME=mail_settings.MAIL_USERNAME,
-            MAIL_PASSWORD=mail_settings.MAIL_PASSWORD,
-            MAIL_FROM=mail_settings.MAIL_FROM,
-            MAIL_PORT=mail_settings.MAIL_PORT,
-            MAIL_SERVER=mail_settings.MAIL_SERVER,
-            MAIL_FROM_NAME=mail_settings.MAIL_FROM_NAME,
-            MAIL_STARTTLS=mail_settings.MAIL_STARTTLS,
-            MAIL_SSL_TLS=mail_settings.MAIL_SSL_TLS,
-            USE_CREDENTIALS=mail_settings.USE_CREDENTIALS,
-            VALIDATE_CERTS=mail_settings.VALIDATE_CERTS,
-            TEMPLATE_FOLDER=str(TEMPLATE_DIR),
-        )
-        _fastmail_instance = FastMail(config)
+    # Always recreate to pick up new configuration
+    # This ensures we get the latest mail settings after restart
+    config = ConnectionConfig(
+        MAIL_USERNAME=mail_settings.MAIL_USERNAME,
+        MAIL_PASSWORD=mail_settings.MAIL_PASSWORD,
+        MAIL_FROM=mail_settings.MAIL_FROM,
+        MAIL_PORT=mail_settings.MAIL_PORT,
+        MAIL_SERVER=mail_settings.MAIL_SERVER,
+        MAIL_FROM_NAME=mail_settings.MAIL_FROM_NAME,
+        MAIL_STARTTLS=mail_settings.MAIL_STARTTLS,
+        MAIL_SSL_TLS=mail_settings.MAIL_SSL_TLS,
+        USE_CREDENTIALS=mail_settings.USE_CREDENTIALS,
+        VALIDATE_CERTS=mail_settings.VALIDATE_CERTS,
+        TEMPLATE_FOLDER=str(TEMPLATE_DIR),
+    )
+    _fastmail_instance = FastMail(config)
+    logger.info(f"FastMail configured for {mail_settings.MAIL_SERVER}:{mail_settings.MAIL_PORT}")
     return _fastmail_instance
 
 
@@ -183,6 +185,10 @@ def send_sms_task(
         logger.warning("Twilio not configured, skipping SMS")
         return "Twilio not configured"
     
+    if not twilio_settings.TWILIO_NUMBER:
+        logger.warning("Twilio number not configured, skipping SMS")
+        return "Twilio number not configured"
+    
     try:
         message = twilio_client.messages.create(
             from_=twilio_settings.TWILIO_NUMBER,
@@ -192,9 +198,67 @@ def send_sms_task(
         logger.info(f"SMS sent successfully to {to}: {message.sid}")
         return f"SMS sent successfully: {message.sid}"
     except Exception as exc:
-        logger.error(f"Failed to send SMS to {to}: {exc}", exc_info=True)
-        # Retry on failure (up to max_retries)
-        raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+        # Check if it's a Twilio REST exception
+        from twilio.base.exceptions import TwilioRestException
+        
+        if isinstance(exc, TwilioRestException):
+            # Handle specific Twilio error codes
+            status_code = getattr(exc, 'status', None)
+            error_msg = getattr(exc, 'msg', str(exc))
+            
+            # 429 = Rate limit exceeded (don't retry - won't help until limit resets)
+            if status_code == 429:
+                logger.warning(
+                    f"Twilio rate limit exceeded for {to}. "
+                    f"Error: {error_msg}. "
+                    f"SMS not sent. Daily limit may be reached."
+                )
+                return f"Twilio rate limit exceeded: {error_msg}"
+            
+            # 400 = Bad request (don't retry - invalid data)
+            if status_code == 400:
+                logger.error(
+                    f"Twilio bad request for {to}: {error_msg}. "
+                    f"Check phone number format."
+                )
+                return f"Twilio bad request: {error_msg}"
+            
+            # Other 4xx errors (client errors) - don't retry
+            if status_code and 400 <= status_code < 500:
+                logger.error(
+                    f"Twilio client error ({status_code}) for {to}: {error_msg}",
+                    exc_info=True
+                )
+                return f"Twilio client error ({status_code}): {error_msg}"
+            
+            # 5xx errors (server errors) - retry
+            if status_code and status_code >= 500:
+                logger.error(
+                    f"Twilio server error ({status_code}) for {to}: {error_msg}",
+                    exc_info=True
+                )
+                # Retry server errors
+                if self.request.retries < self.max_retries:
+                    raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+                else:
+                    logger.error(f"Max retries exceeded for SMS to {to}. Giving up.")
+                    return f"Failed to send SMS after {self.max_retries} retries: {error_msg}"
+            
+            # Unknown Twilio error - log and don't retry
+            logger.error(
+                f"Twilio API error for {to}: {error_msg}",
+                exc_info=True
+            )
+            return f"Twilio error: {error_msg}"
+        else:
+            # Non-Twilio exceptions - log and retry
+            logger.error(f"Failed to send SMS to {to}: {exc}", exc_info=True)
+            # Retry on failure (up to max_retries)
+            if self.request.retries < self.max_retries:
+                raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+            else:
+                logger.error(f"Max retries exceeded for SMS to {to}. Giving up.")
+                return f"Failed to send SMS after {self.max_retries} retries: {str(exc)}"
 
 
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=10)

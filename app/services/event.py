@@ -192,9 +192,14 @@ class ShipmentEventService(BaseService):
                 case ShipmentStatus.placed:
                     subject = "Your Order is Shipped 🚛"
                     template_name = "mail_placed.html"
+                    # Ensure relationships are loaded
+                    if not hasattr(shipment, 'seller') or shipment.seller is None:
+                        await self.session.refresh(shipment, ["seller"])
+                    if not hasattr(shipment, 'delivery_partner') or shipment.delivery_partner is None:
+                        await self.session.refresh(shipment, ["delivery_partner"])
                     context = {
-                        "seller": shipment.seller.name,
-                        "partner": shipment.delivery_partner.name,
+                        "seller": shipment.seller.name if shipment.seller else "FastShip",
+                        "partner": shipment.delivery_partner.name if shipment.delivery_partner else "Delivery Partner",
                     }
                 case ShipmentStatus.out_for_delivery:
                     subject = "Your Order is Arriving Soon 🛵"
@@ -288,9 +293,14 @@ class ShipmentEventService(BaseService):
                 case ShipmentStatus.placed:
                     subject = "Your Order is Shipped 🚛"
                     template_name = "mail_placed.html"
+                    # Ensure relationships are loaded
+                    if not hasattr(shipment, 'seller') or shipment.seller is None:
+                        await self.session.refresh(shipment, ["seller"])
+                    if not hasattr(shipment, 'delivery_partner') or shipment.delivery_partner is None:
+                        await self.session.refresh(shipment, ["delivery_partner"])
                     context = {
-                        "seller": shipment.seller.name,
-                        "partner": shipment.delivery_partner.name,
+                        "seller": shipment.seller.name if shipment.seller else "FastShip",
+                        "partner": shipment.delivery_partner.name if shipment.delivery_partner else "Delivery Partner",
                     }
                 case ShipmentStatus.out_for_delivery:
                     subject = "Your Order is Arriving Soon 🛵"
@@ -301,7 +311,12 @@ class ShipmentEventService(BaseService):
                     await add_shipment_verification_code(shipment.id, verification_code)
                     logger.info(f"Generated verification code {verification_code} for shipment {shipment.id}")
                     
-                    # Send SMS via Celery if phone available
+                    # Always include verification code in email as backup
+                    # (SMS may fail due to rate limits or other issues)
+                    context["verification_code"] = verification_code
+                    
+                    # Send SMS via Celery if phone available (as primary method)
+                    # But email will always contain the code as fallback
                     if client_phone:
                         # Format phone number to E.164 format (required by Twilio)
                         # If phone doesn't start with +, assume it's a Spanish number and add +34
@@ -316,10 +331,7 @@ class ShipmentEventService(BaseService):
                             to=formatted_phone,
                             body=f"Your order is arriving soon! Share the {verification_code} code with your delivery executive to receive your package."
                         )
-                        logger.info(f"Queued SMS to {formatted_phone} for shipment {shipment.id}")
-                    else:
-                        # No phone, include code in email
-                        context["verification_code"] = verification_code
+                        logger.info(f"Queued SMS to {formatted_phone} for shipment {shipment.id} (email also contains code as backup)")
                     
                 case ShipmentStatus.delivered:
                     subject = "Your Order is Delivered ✅"
@@ -338,6 +350,60 @@ class ShipmentEventService(BaseService):
                     context["review_url"] = (
                         f"http://{app_settings.APP_DOMAIN}/shipment/review?token={review_token}"
                     )
+                    
+                    # Send SMS via Celery if phone available
+                    if client_phone:
+                        # Format phone number to E.164 format (required by Twilio)
+                        # If phone doesn't start with +, assume it's a Spanish number and add +34
+                        formatted_phone = client_phone
+                        if not formatted_phone.startswith('+'):
+                            # Remove leading 0 if present (Spanish format: 0XXXXXXXXX -> +34XXXXXXXXX)
+                            if formatted_phone.startswith('0'):
+                                formatted_phone = formatted_phone[1:]
+                            formatted_phone = f"+34{formatted_phone}"
+                        
+                        send_sms_task.delay(
+                            to=formatted_phone,
+                            body=f"✅ Your order has been delivered! Thank you for choosing FastShip. We hope you're satisfied with your delivery."
+                        )
+                        logger.info(f"Queued delivery confirmation SMS to {formatted_phone} for shipment {shipment.id}")
+                case ShipmentStatus.delivered:
+                    subject = "Your Order is Delivered ✅"
+                    template_name = "mail_delivered.html"
+                    # Ensure seller relationship is loaded
+                    if not hasattr(shipment, 'seller') or shipment.seller is None:
+                        await self.session.refresh(shipment, ["seller"])
+                    context = {"seller": shipment.seller.name if shipment.seller else "FastShip"}
+                    
+                    # Generate review token for review link
+                    from app.utils import generate_url_safe_token
+                    from app.config import app_settings
+                    
+                    review_token = generate_url_safe_token(
+                        {"id": str(shipment.id)},
+                        salt="review",
+                        expiry=timedelta(days=30),  # 30-day expiry for reviews
+                    )
+                    context["review_url"] = (
+                        f"http://{app_settings.APP_DOMAIN}/shipment/review?token={review_token}"
+                    )
+                    
+                    # Send SMS via Celery if phone available
+                    if client_phone:
+                        # Format phone number to E.164 format (required by Twilio)
+                        # If phone doesn't start with +, assume it's a Spanish number and add +34
+                        formatted_phone = client_phone
+                        if not formatted_phone.startswith('+'):
+                            # Remove leading 0 if present (Spanish format: 0XXXXXXXXX -> +34XXXXXXXXX)
+                            if formatted_phone.startswith('0'):
+                                formatted_phone = formatted_phone[1:]
+                            formatted_phone = f"+34{formatted_phone}"
+                        
+                        send_sms_task.delay(
+                            to=formatted_phone,
+                            body=f"✅ Your order has been delivered! Thank you for choosing FastShip. We hope you're satisfied with your delivery."
+                        )
+                        logger.info(f"Queued delivery confirmation SMS to {formatted_phone} for shipment {shipment.id}")
                 case ShipmentStatus.cancelled:
                     subject = "Your Order is Cancelled ❌"
                     template_name = "mail_cancelled.html"
