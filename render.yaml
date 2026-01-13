@@ -17,7 +17,7 @@ services:
       - key: REDIS_URL
         fromService:
           name: fastship-redis
-          type: redis
+          type: keyvalue
           property: connectionString
       - key: CORS_ORIGINS
         value: https://fastship-frontend.onrender.com
@@ -88,6 +88,7 @@ services:
       - key: REDIS_URL
         fromService:
           name: fastship-redis
+          type: keyvalue
           property: connectionString
       - key: JWT_SECRET
         sync: false
@@ -107,15 +108,18 @@ services:
         value: "587"
       - key: APP_DOMAIN
         value: fastship-api.onrender.com
-    command: celery -A app.celery_app worker --loglevel=info
+    dockerCommand: celery -A app.celery_app worker --loglevel=info
+
+  # ===== REDIS (Key Value Store) =====
+  - type: keyvalue
+    name: fastship-redis
+    region: oregon
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
 
 databases:
   - name: fastship-db
     databaseName: fastship_db
-    plan: free
-    ipAllowList: []
-
-redis:
-  - name: fastship-redis
     plan: free
     ipAllowList: []
