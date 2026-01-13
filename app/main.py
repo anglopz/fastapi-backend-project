@@ -61,29 +61,36 @@ async def wait_for_redis(max_retries: int = 5, delay: float = 2.0):
 
 @asynccontextmanager
 async def lifespan_handler(app: FastAPI):
-    # Startup
+    # Startup - run checks in background to not block port binding
     import os
+    import asyncio
     port = os.getenv("PORT", "8000")
     print(f"🚀 Starting application on port {port}...")
+    print(f"📡 Server will bind to port {port} immediately")
 
-    # Wait for database to be ready (with shorter timeout for Render)
-    try:
-        await wait_for_database(max_retries=10, delay=2.0)
-    except Exception as e:
-        print(f"❌ Database connection failed: {e}")
-        print("⚠️  Application will start but database operations may fail")
-    
-    # Crear tablas de la base de datos
-    try:
-        await create_db_tables()
-        print("✅ Database tables created/verified")
-    except Exception as e:
-        print(f"⚠️  Could not create database tables: {e}")
+    # Start database/Redis checks in background task (non-blocking)
+    async def startup_checks():
+        # Wait for database to be ready (with shorter timeout for Render)
+        try:
+            await wait_for_database(max_retries=10, delay=2.0)
+        except Exception as e:
+            print(f"❌ Database connection failed: {e}")
+            print("⚠️  Application will start but database operations may fail")
+            return
+        
+        # Crear tablas de la base de datos
+        try:
+            await create_db_tables()
+            print("✅ Database tables created/verified")
+        except Exception as e:
+            print(f"⚠️  Could not create database tables: {e}")
 
-    # Wait for Redis to be ready (non-blocking, continues if fails)
-    await wait_for_redis(max_retries=5, delay=2.0)
-    
-    print(f"✅ Application startup complete, listening on port {port}")
+        # Wait for Redis to be ready (non-blocking, continues if fails)
+        await wait_for_redis(max_retries=5, delay=2.0)
+        print(f"✅ Application startup checks complete")
+
+    # Start checks in background (don't await - let server bind port first)
+    asyncio.create_task(startup_checks())
 
     yield
 
