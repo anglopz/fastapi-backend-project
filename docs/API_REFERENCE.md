@@ -23,18 +23,46 @@ The API uses OAuth2 with JWT tokens. Two separate authentication schemes are ava
 
 ### Health Check
 
-#### GET /health
+#### GET /health/email
 
-Check API health status.
+Verify SMTP email connection configuration.
 
-**Response:**
+**Description:**
+Tests the SMTP connection based on the current EMAIL_MODE setting:
+- **sandbox**: Uses Mailtrap for testing (emails are captured, not sent)
+- **production**: Uses real SMTP server (emails are actually sent)
+
+**Query Parameters:** None
+
+**Response (200 OK):**
 ```json
 {
-  "status": "healthy",
-  "redis": "connected",
-  "service": "FastAPI Backend"
+  "status": "success",
+  "message": "SMTP connection verified",
+  "mode": "sandbox",
+  "server": "sandbox.smtp.mailtrap.io",
+  "port": 587,
+  "username": "020***"
 }
 ```
+
+**Response (500 Error):**
+```json
+{
+  "status": "error",
+  "message": "SMTP connection failed: Authentication failed",
+  "mode": "production",
+  "server": "smtp.gmail.com",
+  "port": 587
+}
+```
+
+**Use Cases:**
+- Verify email configuration before deployment
+- Troubleshoot email delivery issues
+- Monitor email service health
+
+**Note:** This endpoint does not actually send an email, only verifies the connection configuration.
 
 ---
 
@@ -125,6 +153,56 @@ Request password reset email.
   "detail": "Password reset email sent"
 }
 ```
+
+### Get Seller Profile
+
+#### GET /seller/me
+
+Get the current authenticated seller's profile.
+
+**Headers:**
+- `Authorization: Bearer <token>` (required)
+
+**Response:** `200 OK`
+```json
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "Acme Shipping Co.",
+  "email": "seller@example.com"
+}
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Invalid or expired token
+
+### Get Seller Shipments
+
+#### GET /seller/shipments
+
+Get all shipments created by the authenticated seller.
+
+**Headers:**
+- `Authorization: Bearer <token>` (required)
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "content": "Electronics",
+    "weight": 5.5,
+    "destination": 887,
+    "status": "in_transit",
+    "estimated_delivery": "2026-01-10T12:00:00",
+    "client_contact_email": "client@example.com",
+    "client_contact_phone": "+34601539533",
+    "tags": ["express", "fragile"]
+  }
+]
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Invalid or expired token
 
 ### Logout Seller
 
@@ -225,6 +303,58 @@ Update delivery partner information.
   "max_handling_capacity": 75
 }
 ```
+
+### Get Delivery Partner Profile
+
+#### GET /partner/me
+
+Get the current authenticated delivery partner's profile.
+
+**Headers:**
+- `Authorization: Bearer <token>` (required)
+
+**Response:** `200 OK`
+```json
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "FastDelivery Co.",
+  "email": "partner@example.com",
+  "servicable_locations": [887, 8020, 28001],
+  "max_handling_capacity": 50
+}
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Invalid or expired token
+
+### Get Delivery Partner Shipments
+
+#### GET /partner/shipments
+
+Get all shipments assigned to the authenticated delivery partner.
+
+**Headers:**
+- `Authorization: Bearer <token>` (required)
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "content": "Electronics",
+    "weight": 5.5,
+    "destination": 887,
+    "status": "in_transit",
+    "estimated_delivery": "2026-01-10T12:00:00",
+    "client_contact_email": "client@example.com",
+    "client_contact_phone": "+34601539533",
+    "tags": ["express", "fragile"]
+  }
+]
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Invalid or expired token
 
 ---
 

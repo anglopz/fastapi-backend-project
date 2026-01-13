@@ -35,7 +35,10 @@ REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_URL=redis://redis:6379
 
-# Email (SMTP)
+# Email Configuration
+EMAIL_MODE=sandbox  # "sandbox" for Mailtrap testing, "production" for real SMTP
+
+# Production SMTP (used when EMAIL_MODE=production)
 MAIL_USERNAME=your-email@gmail.com
 MAIL_PASSWORD=your-app-password
 MAIL_FROM=noreply@fastship.com
@@ -46,6 +49,12 @@ MAIL_STARTTLS=true
 MAIL_SSL_TLS=false
 USE_CREDENTIALS=true
 VALIDATE_CERTS=true
+
+# Mailtrap (used when EMAIL_MODE=sandbox)
+MAILTRAP_USERNAME=your-mailtrap-username
+MAILTRAP_PASSWORD=your-mailtrap-password
+MAILTRAP_SERVER=sandbox.smtp.mailtrap.io
+MAILTRAP_PORT=587
 
 # SMS (Twilio)
 TWILIO_SID=your-twilio-sid
@@ -188,6 +197,7 @@ sudo certbot --nginx -d api.fastship.com
 ### Health Checks
 
 - **API Health**: `GET /health`
+- **Email Health**: `GET /health/email` - Verify SMTP connection
 - **Database**: PostgreSQL health check in Docker
 - **Redis**: Connection check in application
 
@@ -282,7 +292,9 @@ docker run --rm -v app_redis_data:/data -v $(pwd)/backups:/backup \
 
 4. **Email Not Sending**
    - Check SMTP credentials
-   - Verify email settings
+   - Verify EMAIL_MODE setting (sandbox vs production)
+   - Verify email settings match EMAIL_MODE
+   - Test connection: `GET /health/email`
    - Check Celery worker logs
 
 ### Debug Mode
@@ -308,7 +320,178 @@ environment:
 - [ ] Performance tested
 - [ ] Documentation updated
 
+## Email Configuration
+
+### EMAIL_MODE Setting
+
+The application supports two email modes controlled by the `EMAIL_MODE` environment variable:
+
+#### Sandbox Mode (Testing)
+```bash
+EMAIL_MODE=sandbox
+MAILTRAP_USERNAME=your-mailtrap-username
+MAILTRAP_PASSWORD=your-mailtrap-password
+MAILTRAP_SERVER=sandbox.smtp.mailtrap.io
+MAILTRAP_PORT=587
+```
+
+- Uses Mailtrap for email testing
+- Emails are captured in Mailtrap inbox, not actually sent
+- Perfect for development and testing
+- No risk of sending test emails to real users
+
+#### Production Mode
+```bash
+EMAIL_MODE=production
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+MAIL_SERVER=smtp.gmail.com
+MAIL_PORT=587
+```
+
+- Uses real SMTP server
+- Emails are actually sent to recipients
+- Use for production deployments
+- Requires valid SMTP credentials
+
+### Verifying Email Configuration
+
+Test your email configuration using the health endpoint:
+
+```bash
+curl http://localhost:8000/health/email
+```
+
+**Success Response:**
+```json
+{
+  "status": "success",
+  "message": "SMTP connection verified",
+  "mode": "sandbox",
+  "server": "sandbox.smtp.mailtrap.io",
+  "port": 587,
+  "username": "020***"
+}
+```
+
+**Error Response:**
+```json
+{
+  "status": "error",
+  "message": "SMTP connection failed: Authentication failed",
+  "mode": "production",
+  "server": "smtp.gmail.com",
+  "port": 587
+}
+```
+
+## Render Deployment
+
+### Prerequisites
+
+- Render account (https://render.com)
+- GitHub repository with your code
+- PostgreSQL database (Render PostgreSQL service)
+- Redis instance (Render Redis service)
+
+### Step 1: Create Services on Render
+
+1. **PostgreSQL Database**
+   - Create new PostgreSQL service
+   - Note the internal database URL
+   - Set as `DATABASE_URL` environment variable
+
+2. **Redis Instance**
+   - Create new Redis service
+   - Note the internal Redis URL
+   - Set as `REDIS_URL` environment variable
+
+3. **Web Service (API)**
+   - Create new Web Service
+   - Connect to your GitHub repository
+   - Use `render.yaml` configuration (or manual setup)
+
+### Step 2: Configure Environment Variables
+
+Set the following environment variables in Render dashboard:
+
+**Required:**
+```bash
+DATABASE_URL=<from-postgres-service>
+REDIS_URL=<from-redis-service>
+JWT_SECRET=<generate-secure-random-string>
+EMAIL_MODE=production
+MAIL_USERNAME=<your-smtp-username>
+MAIL_PASSWORD=<your-smtp-password>
+MAIL_SERVER=<your-smtp-server>
+MAIL_FROM=noreply@fastship.com
+FRONTEND_URL=<your-frontend-url>
+APP_DOMAIN=<your-api-domain>
+```
+
+**Optional:**
+```bash
+TWILIO_SID=<your-twilio-sid>
+TWILIO_AUTH_TOKEN=<your-twilio-token>
+TWILIO_NUMBER=<your-twilio-number>
+CORS_ORIGINS=<comma-separated-origins>
+```
+
+### Step 3: Build Configuration
+
+**Build Command:**
+```bash
+pip install -r requirements.txt
+```
+
+**Start Command:**
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+### Step 4: Deploy
+
+1. Push your code to GitHub
+2. Render will automatically detect changes and deploy
+3. Monitor deployment logs
+4. Verify health: `GET https://your-api.onrender.com/health/email`
+
+### Step 5: Background Workers (Celery)
+
+For Celery workers, create a separate Background Worker service:
+
+**Start Command:**
+```bash
+celery -A app.celery_app worker --loglevel=info
+```
+
+**Environment Variables:**
+- Same as Web Service
+- Ensure `REDIS_URL` points to same Redis instance
+
+### Render-Specific Considerations
+
+1. **Database Migrations**
+   - Run migrations on first deploy
+   - Use Render shell or add to startup script
+
+2. **Health Checks**
+   - Render uses `/health` endpoint
+   - Ensure health endpoints are working
+
+3. **Auto-Deploy**
+   - Enable auto-deploy on git push
+   - Or use manual deploys for production
+
+4. **Scaling**
+   - Render supports horizontal scaling
+   - Use load balancer for multiple instances
+
+5. **Environment Variables**
+   - Use Render's environment variable management
+   - Mark sensitive variables as "Secret"
+
 ---
 
-**Last Updated**: January 8, 2026
+**Last Updated**: January 13, 2026
 
