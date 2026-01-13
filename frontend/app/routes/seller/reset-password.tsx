@@ -8,7 +8,6 @@ import { Package, Lock, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-reac
 import { Link } from "react-router";
 import { ThemeToggle } from "~/components/theme-toggle";
 import { toast } from "sonner";
-import api from "~/lib/api";
 
 export default function SellerResetPasswordPage() {
   const [searchParams] = useSearchParams();

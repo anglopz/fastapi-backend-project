@@ -56,21 +56,13 @@ function formatLocalDate(timestamp: string): string {
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "~/components/ui/table";
 import { AuthContext } from "~/contexts/AuthContext";
 import api from "~/lib/api";
-import type { Shipment } from "~/lib/client";
+import { type Shipment, ShipmentStatus } from "~/lib/client";
+import { getLatestStatus } from "~/lib/utils";
 
 
 export default function ShipmentView({ shipment: shipmentProp }: { shipment: Shipment }) {
-    const queryClient = useQueryClient()
 
     // Fetch fresh shipment data to ensure timeline is loaded
     const { data: freshShipment, isLoading: isLoadingShipment } = useQuery({
@@ -267,7 +259,8 @@ export function ShipmentViewActions({ shipment }: { shipment: Shipment }) {
     const handleCancelShipment = async () => {
         if (!shipment.id) return
         
-        if (shipment.status === "cancelled") {
+        const currentStatus = getLatestStatus(shipment)
+        if (currentStatus === ShipmentStatus.Cancelled) {
             toast.warning("Shipment is already cancelled")
             return
         }
@@ -280,10 +273,14 @@ export function ShipmentViewActions({ shipment }: { shipment: Shipment }) {
         cancelShipmentMutation.mutate(shipment.id)
     }
 
+    const currentStatus = getLatestStatus(shipment)
+    const isCancelled = currentStatus === ShipmentStatus.Cancelled
+    const isDelivered = currentStatus === ShipmentStatus.Delivered
+
     return (
         <>
             {
-                user === "seller" && shipment.status !== "cancelled" && shipment.status !== "delivered" &&
+                user === "seller" && !isCancelled && !isDelivered &&
                 <Button 
                     variant="outline" 
                     size="sm"
@@ -295,7 +292,7 @@ export function ShipmentViewActions({ shipment }: { shipment: Shipment }) {
                 </Button>
             }
             {
-                user === "partner" && shipment.status !== "cancelled" && shipment.status !== "delivered" &&
+                user === "partner" && !isCancelled && !isDelivered &&
                 <Button onClick={() => {
                     navigate({
                         pathname: "/update-shipment",
@@ -307,10 +304,10 @@ export function ShipmentViewActions({ shipment }: { shipment: Shipment }) {
                 </Button>
             }
             {
-                user === "partner" && (shipment.status === "cancelled" || shipment.status === "delivered") &&
+                user === "partner" && (isCancelled || isDelivered) &&
                 <Button disabled size="sm" variant="outline">
                     <Edit3 className="size-4 mr-2" />
-                    {shipment.status === "cancelled" ? "Shipment Cancelled" : "Shipment Delivered"}
+                    {isCancelled ? "Shipment Cancelled" : "Shipment Delivered"}
                 </Button>
             }
         </>

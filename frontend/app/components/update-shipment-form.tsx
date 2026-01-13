@@ -64,7 +64,7 @@ export function UpdateShipmentForm({
                 throw error
             }
         },
-        onSuccess: (response) => {
+        onSuccess: () => {
             toast.success("Shipment updated successfully")
             // Refetch queries immediately to get fresh data with timeline
             if (shipment?.id) {
@@ -119,8 +119,9 @@ export function UpdateShipmentForm({
         : null
 
     // Check if shipment cannot be updated
-    const isCancelled = shipment?.status === ShipmentStatus.Cancelled
-    const isDelivered = shipment?.status === ShipmentStatus.Delivered
+    const currentStatus = shipment ? getLatestStatus(shipment) : null
+    const isCancelled = currentStatus === ShipmentStatus.Cancelled
+    const isDelivered = currentStatus === ShipmentStatus.Delivered
     const cannotUpdate = isCancelled || isDelivered
 
     // Early return if shipment cannot be updated
@@ -260,7 +261,7 @@ function QRScanner({ onScan }: { onScan: (id: string) => void }) {
             <video id="qr-scan-video"></video>
             <QrReader
                 videoId="qr-scan-video"
-                onResult={(result, error) => {
+                onResult={(result) => {
                     if (result) {
                         onScan(result.getText())
                         setOpen(false)

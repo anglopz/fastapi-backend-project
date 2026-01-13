@@ -1,7 +1,6 @@
 import { Link } from "react-router";
 import { LoginForm } from "~/components/login-form";
 import { Package, ArrowLeft } from "lucide-react";
-import { Button } from "~/components/ui/button";
 import { ThemeToggle } from "~/components/theme-toggle";
 
 export default function SellerLoginPage() {

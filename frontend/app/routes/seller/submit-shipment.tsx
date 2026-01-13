@@ -1,12 +1,7 @@
-import { useQuery } from "@tanstack/react-query"
 import { useContext } from "react"
 import { Navigate } from "react-router"
 import { AppSidebar } from "~/components/app-sidebar"
 import { SubmitShipmentForm } from "~/components/submit-shipment-form"
-import { Button } from "~/components/ui/button"
-import { Input } from "~/components/ui/input"
-import { Label } from "~/components/ui/label"
-import Loading from "~/components/ui/loading"
 import { Separator } from "~/components/ui/separator"
 import {
   SidebarInset,
@@ -14,11 +9,10 @@ import {
   SidebarTrigger,
 } from "~/components/ui/sidebar"
 import { AuthContext } from "~/contexts/AuthContext"
-import api from "~/lib/api"
 
 export default function SubmitShipmentPage() {
 
-  const { token, user, logout } = useContext(AuthContext)
+  const { token, user } = useContext(AuthContext)
   if (!token) {
     return <Navigate to="/" />
   }

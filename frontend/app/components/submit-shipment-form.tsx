@@ -14,7 +14,9 @@ export function SubmitShipmentForm({
   const queryClient = useQueryClient()
 
   const shipments = useMutation({
-    mutationFn: api.shipment.submitShipment,
+    mutationFn: async (data: Parameters<typeof api.shipment.submitShipment>[0]) => {
+      return await api.shipment.submitShipment(data);
+    },
     onSuccess: (response) => {
       toast(`Shipment is submitted successfully (#${response.data.id})`)
       queryClient.invalidateQueries({ queryKey: ["shipments"] })

@@ -6,13 +6,13 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-function getLatestStatus(shipment: Shipment) {
+function getLatestStatus(shipment: Shipment): string {
   // Check if timeline exists and has items
   if (shipment.timeline && Array.isArray(shipment.timeline) && shipment.timeline.length > 0) {
     return shipment.timeline[shipment.timeline.length - 1].status
   }
-  // Fallback to shipment status if timeline is not available
-  return shipment.status || "unknown"
+  // Fallback to "placed" if timeline is not available
+  return "placed"
 }
 
 function getShipmentsCountWithStatus(
