@@ -261,8 +261,8 @@ async def root():
             }
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: #333;
+                background: #0a0e27;
+                color: #e4e7eb;
                 min-height: 100vh;
                 display: flex;
                 align-items: center;
@@ -270,144 +270,191 @@ async def root():
                 padding: 20px;
             }
             .container {
-                background: white;
-                border-radius: 16px;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-                max-width: 800px;
+                background: #1a1f3a;
+                border: 1px solid #2d3748;
+                border-radius: 8px;
+                box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+                max-width: 900px;
                 width: 100%;
-                padding: 40px;
-                text-align: center;
+                padding: 48px;
+            }
+            .header {
+                border-bottom: 1px solid #2d3748;
+                padding-bottom: 24px;
+                margin-bottom: 32px;
             }
             h1 {
-                color: #667eea;
-                font-size: 2.5em;
-                margin-bottom: 10px;
-                font-weight: 700;
+                color: #ffffff;
+                font-size: 2.25em;
+                margin-bottom: 8px;
+                font-weight: 600;
+                letter-spacing: -0.5px;
             }
             .subtitle {
-                color: #666;
-                font-size: 1.2em;
-                margin-bottom: 30px;
+                color: #9ca3af;
+                font-size: 1.1em;
+                margin-bottom: 16px;
+                font-weight: 400;
+            }
+            .status {
+                display: inline-flex;
+                align-items: center;
+                background: #065f46;
+                color: #10b981;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-size: 0.875em;
+                font-weight: 500;
+                border: 1px solid #10b981;
+            }
+            .status::before {
+                content: "";
+                width: 8px;
+                height: 8px;
+                background: #10b981;
+                border-radius: 50%;
+                margin-right: 8px;
+                display: inline-block;
             }
             .description {
-                color: #555;
-                line-height: 1.6;
-                margin-bottom: 40px;
-                text-align: left;
-            }
-            .links {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 20px;
-                margin-top: 40px;
-            }
-            .link-card {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                padding: 25px;
-                border-radius: 12px;
-                text-decoration: none;
-                transition: transform 0.3s ease, box-shadow 0.3s ease;
-                display: block;
-            }
-            .link-card:hover {
-                transform: translateY(-5px);
-                box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
-            }
-            .link-card h3 {
-                margin-bottom: 10px;
-                font-size: 1.3em;
-            }
-            .link-card p {
-                opacity: 0.9;
-                font-size: 0.9em;
+                color: #d1d5db;
+                line-height: 1.7;
+                margin-bottom: 32px;
+                font-size: 0.95em;
             }
             .features {
-                text-align: left;
-                margin: 30px 0;
-                padding: 20px;
-                background: #f8f9fa;
-                border-radius: 8px;
+                margin: 32px 0;
+                padding: 24px;
+                background: #0f1419;
+                border: 1px solid #2d3748;
+                border-radius: 6px;
             }
             .features h3 {
-                color: #667eea;
-                margin-bottom: 15px;
+                color: #ffffff;
+                margin-bottom: 20px;
+                font-size: 1.1em;
+                font-weight: 600;
             }
             .features ul {
                 list-style: none;
                 padding-left: 0;
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 12px;
             }
             .features li {
-                padding: 8px 0;
-                padding-left: 25px;
+                padding: 10px 0;
+                padding-left: 24px;
                 position: relative;
+                color: #d1d5db;
+                font-size: 0.9em;
             }
             .features li:before {
-                content: "✓";
+                content: "•";
                 position: absolute;
                 left: 0;
-                color: #667eea;
+                color: #3b82f6;
                 font-weight: bold;
+                font-size: 1.2em;
             }
-            .status {
-                display: inline-block;
-                background: #10b981;
-                color: white;
-                padding: 8px 16px;
-                border-radius: 20px;
-                font-size: 0.9em;
-                margin-bottom: 20px;
+            .links {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 16px;
+                margin-top: 32px;
+            }
+            .link-card {
+                background: #0f1419;
+                border: 1px solid #2d3748;
+                color: #e4e7eb;
+                padding: 20px;
+                border-radius: 6px;
+                text-decoration: none;
+                transition: all 0.2s ease;
+                display: block;
+            }
+            .link-card:hover {
+                border-color: #3b82f6;
+                background: #1a2332;
+                transform: translateY(-2px);
+            }
+            .link-card h3 {
+                margin-bottom: 8px;
+                font-size: 1.1em;
+                font-weight: 600;
+                color: #ffffff;
+            }
+            .link-card p {
+                color: #9ca3af;
+                font-size: 0.875em;
+                line-height: 1.5;
+            }
+            .footer {
+                margin-top: 40px;
+                padding-top: 24px;
+                border-top: 1px solid #2d3748;
+                text-align: center;
             }
             .version {
-                color: #999;
-                font-size: 0.9em;
-                margin-top: 30px;
+                color: #6b7280;
+                font-size: 0.875em;
+            }
+            .version a {
+                color: #3b82f6;
+                text-decoration: none;
+            }
+            .version a:hover {
+                text-decoration: underline;
             }
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>🚀 FastShip API</h1>
-            <p class="subtitle">Comprehensive Shipping Management API</p>
-            <span class="status">● Live</span>
+            <div class="header">
+                <h1>FastShip API</h1>
+                <p class="subtitle">Enterprise Shipping Management Platform</p>
+                <span class="status">Operational</span>
+            </div>
             
             <div class="description">
-                <p>FastShip is a comprehensive shipping management API that enables sellers and delivery partners to manage shipments efficiently.</p>
+                <p>FastShip provides a comprehensive REST API for managing shipping operations, enabling seamless integration between sellers, delivery partners, and logistics systems. Built for enterprise-scale deployments with robust authentication, real-time tracking, and automated routing capabilities.</p>
             </div>
             
             <div class="features">
-                <h3>Key Features</h3>
+                <h3>Core Capabilities</h3>
                 <ul>
-                    <li>Seller & Delivery Partner Management</li>
+                    <li>Seller & Partner Account Management</li>
                     <li>Real-time Shipment Tracking</li>
-                    <li>Location-Based Routing</li>
-                    <li>Email & SMS Notifications</li>
-                    <li>Review System</li>
+                    <li>Intelligent Location-Based Routing</li>
+                    <li>Multi-channel Notifications (Email/SMS)</li>
+                    <li>Customer Review & Feedback System</li>
                     <li>OAuth2 JWT Authentication</li>
                 </ul>
             </div>
             
             <div class="links">
                 <a href="/docs" class="link-card">
-                    <h3>📚 Swagger UI</h3>
-                    <p>Interactive API documentation</p>
+                    <h3>Swagger UI</h3>
+                    <p>Interactive API documentation and testing interface</p>
                 </a>
                 <a href="/scalar" class="link-card">
-                    <h3>✨ Scalar Docs</h3>
-                    <p>Modern API documentation</p>
+                    <h3>Scalar Documentation</h3>
+                    <p>Comprehensive API reference documentation</p>
                 </a>
                 <a href="/api/v1/health" class="link-card">
-                    <h3>💚 Health Check</h3>
-                    <p>API status endpoint</p>
+                    <h3>Health Status</h3>
+                    <p>System health and connectivity status</p>
                 </a>
                 <a href="/redoc" class="link-card">
-                    <h3>📖 ReDoc</h3>
-                    <p>Alternative documentation</p>
+                    <h3>ReDoc</h3>
+                    <p>Alternative API documentation format</p>
                 </a>
             </div>
             
-            <div class="version">
-                <p>Version 1.0.0 | <a href="https://fastship.com/support" style="color: #667eea;">Support</a></p>
+            <div class="footer">
+                <div class="version">
+                    <p>Version 1.0.0 | <a href="https://fastship.com/support">Enterprise Support</a></p>
+                </div>
             </div>
         </div>
     </body>
