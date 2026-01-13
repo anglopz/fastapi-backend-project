@@ -261,146 +261,181 @@ async def root():
             }
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                background: #0a0e27;
-                color: #e4e7eb;
+                background: linear-gradient(to bottom, hsl(var(--background)), hsl(var(--muted) / 0.2));
+                --background: 0 0% 100%;
+                --foreground: 222.2 84% 4.9%;
+                --muted: 210 40% 96.1%;
+                --muted-foreground: 215.4 16.3% 46.9%;
+                --card: 0 0% 100%;
+                --card-foreground: 222.2 84% 4.9%;
+                --border: 214.3 31.8% 91.4%;
+                color: hsl(var(--foreground));
                 min-height: 100vh;
                 display: flex;
+                flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                padding: 20px;
+                padding: 48px 16px;
+            }
+            @media (prefers-color-scheme: dark) {
+                body {
+                    --background: 222.2 84% 4.9%;
+                    --foreground: 210 40% 98%;
+                    --muted: 217.2 32.6% 17.5%;
+                    --muted-foreground: 215 20.2% 65.1%;
+                    --card: 222.2 84% 4.9%;
+                    --card-foreground: 210 40% 98%;
+                    --border: 217.2 32.6% 17.5%;
+                }
             }
             .container {
-                background: #1a1f3a;
-                border: 1px solid #2d3748;
-                border-radius: 8px;
-                box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-                max-width: 900px;
+                max-width: 42rem;
                 width: 100%;
-                padding: 48px;
+                text-align: center;
             }
             .header {
-                border-bottom: 1px solid #2d3748;
-                padding-bottom: 24px;
                 margin-bottom: 32px;
             }
             h1 {
-                color: #ffffff;
-                font-size: 2.25em;
-                margin-bottom: 8px;
-                font-weight: 600;
-                letter-spacing: -0.5px;
+                font-size: 3.75rem;
+                line-height: 1;
+                font-weight: 700;
+                letter-spacing: -0.025em;
+                margin-bottom: 16px;
+                background: linear-gradient(to right, hsl(var(--foreground)), hsl(var(--foreground) / 0.7));
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
             }
             .subtitle {
-                color: #9ca3af;
-                font-size: 1.1em;
-                margin-bottom: 16px;
-                font-weight: 400;
-            }
-            .status {
-                display: inline-flex;
-                align-items: center;
-                background: #065f46;
-                color: #10b981;
-                padding: 6px 12px;
-                border-radius: 4px;
-                font-size: 0.875em;
-                font-weight: 500;
-                border: 1px solid #10b981;
-            }
-            .status::before {
-                content: "";
-                width: 8px;
-                height: 8px;
-                background: #10b981;
-                border-radius: 50%;
-                margin-right: 8px;
-                display: inline-block;
+                font-size: 1.5rem;
+                line-height: 2rem;
+                color: hsl(var(--muted-foreground));
+                margin-bottom: 8px;
             }
             .description {
-                color: #d1d5db;
-                line-height: 1.7;
-                margin-bottom: 32px;
-                font-size: 0.95em;
-            }
-            .features {
-                margin: 32px 0;
-                padding: 24px;
-                background: #0f1419;
-                border: 1px solid #2d3748;
-                border-radius: 6px;
-            }
-            .features h3 {
-                color: #ffffff;
-                margin-bottom: 20px;
-                font-size: 1.1em;
-                font-weight: 600;
-            }
-            .features ul {
-                list-style: none;
-                padding-left: 0;
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                gap: 12px;
-            }
-            .features li {
-                padding: 10px 0;
-                padding-left: 24px;
-                position: relative;
-                color: #d1d5db;
-                font-size: 0.9em;
-            }
-            .features li:before {
-                content: "•";
-                position: absolute;
-                left: 0;
-                color: #3b82f6;
-                font-weight: bold;
-                font-size: 1.2em;
+                font-size: 1rem;
+                color: hsl(var(--muted-foreground) / 0.8);
+                max-width: 36rem;
+                margin: 0 auto 32px;
+                line-height: 1.6;
             }
             .links {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                justify-content: center;
+                align-items: center;
+                margin: 24px 0 48px;
+            }
+            @media (min-width: 640px) {
+                .links {
+                    flex-direction: row;
+                }
+            }
+            .link-button {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 0.5rem;
+                font-size: 0.875rem;
+                font-weight: 500;
+                transition: all 0.2s;
+                text-decoration: none;
+                padding: 12px 24px;
+                min-width: 200px;
+            }
+            .link-button-primary {
+                background: hsl(var(--foreground));
+                color: hsl(var(--background));
+            }
+            .link-button-primary:hover {
+                opacity: 0.9;
+            }
+            .link-button-outline {
+                border: 1px solid hsl(var(--border));
+                background: transparent;
+                color: hsl(var(--foreground));
+            }
+            .link-button-outline:hover {
+                background: hsl(var(--muted));
+            }
+            .features {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 24px;
+                margin-top: 48px;
+                max-width: 48rem;
+            }
+            @media (min-width: 768px) {
+                .features {
+                    grid-template-columns: repeat(3, 1fr);
+                }
+            }
+            .feature-card {
+                padding: 24px;
+                border-radius: 0.5rem;
+                border: 1px solid hsl(var(--border));
+                background: hsl(var(--card));
+                text-align: left;
+            }
+            .feature-card h3 {
+                font-weight: 600;
+                margin-bottom: 8px;
+                color: hsl(var(--card-foreground));
+            }
+            .feature-card p {
+                font-size: 0.875rem;
+                color: hsl(var(--muted-foreground));
+                line-height: 1.5;
+            }
+            .docs-section {
+                margin-top: 48px;
+                padding-top: 48px;
+                border-top: 1px solid hsl(var(--border));
+            }
+            .docs-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
                 gap: 16px;
-                margin-top: 32px;
+                margin-top: 24px;
             }
-            .link-card {
-                background: #0f1419;
-                border: 1px solid #2d3748;
-                color: #e4e7eb;
+            .doc-link {
                 padding: 20px;
-                border-radius: 6px;
+                border-radius: 0.5rem;
+                border: 1px solid hsl(var(--border));
+                background: hsl(var(--card));
                 text-decoration: none;
-                transition: all 0.2s ease;
+                transition: all 0.2s;
                 display: block;
             }
-            .link-card:hover {
-                border-color: #3b82f6;
-                background: #1a2332;
-                transform: translateY(-2px);
+            .doc-link:hover {
+                border-color: hsl(var(--foreground));
+                background: hsl(var(--muted));
             }
-            .link-card h3 {
-                margin-bottom: 8px;
-                font-size: 1.1em;
+            .doc-link h3 {
+                font-size: 1.1rem;
                 font-weight: 600;
-                color: #ffffff;
+                margin-bottom: 8px;
+                color: hsl(var(--card-foreground));
             }
-            .link-card p {
-                color: #9ca3af;
-                font-size: 0.875em;
+            .doc-link p {
+                font-size: 0.875rem;
+                color: hsl(var(--muted-foreground));
                 line-height: 1.5;
             }
             .footer {
-                margin-top: 40px;
+                margin-top: 48px;
                 padding-top: 24px;
-                border-top: 1px solid #2d3748;
+                border-top: 1px solid hsl(var(--border));
                 text-align: center;
             }
             .version {
-                color: #6b7280;
-                font-size: 0.875em;
+                color: hsl(var(--muted-foreground));
+                font-size: 0.875rem;
             }
             .version a {
-                color: #3b82f6;
+                color: hsl(var(--foreground));
                 text-decoration: none;
             }
             .version a:hover {
@@ -411,49 +446,59 @@ async def root():
     <body>
         <div class="container">
             <div class="header">
-                <h1>FastShip API</h1>
-                <p class="subtitle">Enterprise Shipping Management Platform</p>
-                <span class="status">Operational</span>
-            </div>
-            
-            <div class="description">
-                <p>FastShip provides a comprehensive REST API for managing shipping operations, enabling seamless integration between sellers, delivery partners, and logistics systems. Built for enterprise-scale deployments with robust authentication, real-time tracking, and automated routing capabilities.</p>
-            </div>
-            
-            <div class="features">
-                <h3>Core Capabilities</h3>
-                <ul>
-                    <li>Seller & Partner Account Management</li>
-                    <li>Real-time Shipment Tracking</li>
-                    <li>Intelligent Location-Based Routing</li>
-                    <li>Multi-channel Notifications (Email/SMS)</li>
-                    <li>Customer Review & Feedback System</li>
-                    <li>OAuth2 JWT Authentication</li>
-                </ul>
+                <h1>Welcome to FastShip API</h1>
+                <p class="subtitle">Your trusted partner for fast and reliable shipment management</p>
+                <p class="description">
+                    Start your journey with us right now! Manage your shipments efficiently with our comprehensive platform.
+                </p>
             </div>
             
             <div class="links">
-                <a href="/docs" class="link-card">
-                    <h3>Swagger UI</h3>
-                    <p>Interactive API documentation and testing interface</p>
-                </a>
-                <a href="/scalar" class="link-card">
-                    <h3>Scalar Documentation</h3>
-                    <p>Comprehensive API reference documentation</p>
-                </a>
-                <a href="/api/v1/health" class="link-card">
-                    <h3>Health Status</h3>
-                    <p>System health and connectivity status</p>
-                </a>
-                <a href="/redoc" class="link-card">
-                    <h3>ReDoc</h3>
-                    <p>Alternative API documentation format</p>
-                </a>
+                <a href="/docs" class="link-button link-button-primary">Swagger UI</a>
+                <a href="/scalar" class="link-button link-button-outline">Scalar Docs</a>
+            </div>
+
+            <div class="features">
+                <div class="feature-card">
+                    <h3>Fast Delivery</h3>
+                    <p>Get your packages delivered quickly and safely</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Real-Time Tracking</h3>
+                    <p>Track your shipments in real-time from start to finish</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Secure Platform</h3>
+                    <p>Your data is protected with enterprise-grade security</p>
+                </div>
+            </div>
+
+            <div class="docs-section">
+                <h2 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 8px; color: hsl(var(--foreground));">API Documentation</h2>
+                <p style="color: hsl(var(--muted-foreground)); margin-bottom: 24px;">Explore our comprehensive API documentation</p>
+                <div class="docs-grid">
+                    <a href="/docs" class="doc-link">
+                        <h3>Swagger UI</h3>
+                        <p>Interactive API documentation and testing interface</p>
+                    </a>
+                    <a href="/scalar" class="doc-link">
+                        <h3>Scalar Docs</h3>
+                        <p>Comprehensive API reference documentation</p>
+                    </a>
+                    <a href="/api/v1/health" class="doc-link">
+                        <h3>Health Check</h3>
+                        <p>System health and connectivity status</p>
+                    </a>
+                    <a href="/redoc" class="doc-link">
+                        <h3>ReDoc</h3>
+                        <p>Alternative API documentation format</p>
+                    </a>
+                </div>
             </div>
             
             <div class="footer">
                 <div class="version">
-                    <p>Version 1.0.0 | <a href="https://fastship.com/support">Enterprise Support</a></p>
+                    <p>Version 1.0.0 | <a href="https://fastship.com/support">Support</a></p>
                 </div>
             </div>
         </div>
