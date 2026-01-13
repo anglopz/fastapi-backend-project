@@ -67,10 +67,8 @@ services:
         value: https://fastship-api.onrender.com/api/v1
       - key: NODE_ENV
         value: production
-    routes:  # Important for SPA routing
-      - type: rewrite
-        source: /*
-        destination: /index.html
+    # Note: routes field is only for static sites, not Docker services
+    # SPA routing is handled by nginx.conf in Dockerfile.prod
 
   # ===== CELERY WORKER =====
   - type: worker
