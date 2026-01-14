@@ -3,7 +3,7 @@
 ## Base URL
 
 - **Development**: `http://localhost:8000`
-- **Production**: `https://api.fastship.com`
+- **Production**: `https://fastship-api.onrender.com`
 
 ## Authentication
 
@@ -562,9 +562,9 @@ Some endpoints have rate limiting:
 
 ## Interactive Documentation
 
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **OpenAPI JSON**: http://localhost:8000/openapi.json
+- **Swagger UI**: https://fastship-api.onrender.com/docs
+- **Scalar Docs**: https://fastship-api.onrender.com/scalar
+- **OpenAPI JSON**: https://fastship-api.onrender.com/openapi.json
 
 ---
 

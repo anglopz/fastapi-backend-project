@@ -23,9 +23,9 @@ docker-compose up -d
 curl http://localhost:8000/health
 ```
 
-**Frontend:** http://localhost:5173  
-**API Documentation:** http://localhost:8000/docs  
-**Alternative Docs:** http://localhost:8000/redoc
+**Frontend:** https://fastship-frontend.onrender.com/  
+**API Documentation:** https://fastship-api.onrender.com/docs  
+**Alternative Docs:** https://fastship-api.onrender.com/scalar
 
 ## Features
 
@@ -191,8 +191,10 @@ MIT License - see LICENSE file for details
 
 ## Links
 
-- **API Docs**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
+- **Frontend**: https://fastship-frontend.onrender.com/
+- **API Docs**: https://fastship-api.onrender.com/docs
+- **Scalar Docs**: https://fastship-api.onrender.com/scalar
+- **Health Check**: https://fastship-api.onrender.com/health
 - **Project Analysis**: [_PROJECT_ANALYSIS.md](_PROJECT_ANALYSIS.md)
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md)
 - **Roadmap**: [ROADMAP.md](ROADMAP.md)
