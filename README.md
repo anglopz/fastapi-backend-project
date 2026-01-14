@@ -9,7 +9,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis)](https://redis.io/)
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Clone the repository
@@ -27,19 +27,19 @@ curl http://localhost:8000/health
 **API Documentation:** http://localhost:8000/docs  
 **Alternative Docs:** http://localhost:8000/redoc
 
-## ✨ Features
+## Features
 
-- **🔐 Authentication**: JWT-based authentication with separate schemes for sellers and delivery partners
-- **📦 Shipment Management**: Create, track, and manage shipments with real-time status updates
-- **📍 Location-Based Routing**: Automatic assignment of delivery partners based on destination
-- **🏷️ Tagging System**: Add tags to shipments for special handling instructions
-- **📧 Email & SMS**: Real-time notifications via email and SMS (Twilio)
-- **⭐ Review System**: Collect customer reviews after delivery
-- **🔄 Async Tasks**: Celery-based background task processing
-- **📊 Request Logging**: Comprehensive request/response logging with performance metrics
-- **📚 API Documentation**: Complete OpenAPI 3.1.0 documentation with examples
+- **Authentication**: JWT-based authentication with separate schemes for sellers and delivery partners
+- **Shipment Management**: Create, track, and manage shipments with real-time status updates
+- **Location-Based Routing**: Automatic assignment of delivery partners based on destination
+- **Tagging System**: Add tags to shipments for special handling instructions
+- **Email & SMS**: Real-time notifications via email and SMS (Twilio)
+- **Review System**: Collect customer reviews after delivery
+- **Async Tasks**: Celery-based background task processing
+- **Request Logging**: Comprehensive request/response logging with performance metrics
+- **API Documentation**: Complete OpenAPI 3.1.0 documentation with examples
 
-## 🏗️ Architecture
+## Architecture
 
 ### Backend
 - **Framework**: FastAPI (async Python web framework)
@@ -59,7 +59,7 @@ curl http://localhost:8000/health
 - **Containerization**: Docker & Docker Compose
 - **CORS**: Configured for frontend-backend communication
 
-## 📋 Requirements
+## Requirements
 
 - Docker & Docker Compose
 - Python 3.11+ (for local backend development)
@@ -67,7 +67,7 @@ curl http://localhost:8000/health
 - PostgreSQL 15 (via Docker)
 - Redis 7 (via Docker)
 
-## 🛠️ Installation
+## Installation
 
 ### Using Docker Compose (Recommended)
 
@@ -99,7 +99,7 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-## 📖 Documentation
+## Documentation
 
 - **[Architecture](docs/ARCHITECTURE.md)** - System design and architecture
 - **[API Reference](docs/API_REFERENCE.md)** - Complete API documentation
@@ -107,7 +107,7 @@ uvicorn app.main:app --reload
 - **[Development](docs/DEVELOPMENT.md)** - Development setup and contribution guide
 - **[Decisions](docs/DECISIONS.md)** - Architecture decision records (ADRs)
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run all tests
@@ -120,7 +120,7 @@ docker-compose exec api pytest tests/test_seller.py
 docker-compose exec api pytest --cov=app
 ```
 
-## 📦 Project Structure
+## Project Structure
 
 ```
 app/
@@ -131,7 +131,7 @@ app/
 │   ├── services/         # Business logic services
 │   └── templates/        # HTML templates
 ├── frontend/              # Frontend (React/TypeScript)
-│   ├── app/              # Remix app structure
+│   ├── app/              # React app structure
 │   │   ├── components/   # React components
 │   │   ├── routes/       # Route components
 │   │   ├── contexts/     # React contexts (Auth)
@@ -147,7 +147,7 @@ app/
 └── _section_integration/  # Section integration files
 ```
 
-## 🔧 Configuration
+## Configuration
 
 Environment variables (see `env.example`):
 
@@ -157,7 +157,7 @@ Environment variables (see `env.example`):
 - **Email**: `MAIL_*` variables
 - **SMS**: `TWILIO_*` variables
 
-## 🚦 API Endpoints
+## API Endpoints
 
 ### Authentication
 - `POST /seller/signup` - Register seller
@@ -174,22 +174,22 @@ Environment variables (see `env.example`):
 
 See [API Reference](docs/API_REFERENCE.md) for complete documentation.
 
-## 📊 Status
+## Status
 
-- **Sections Completed**: 16-30 ✅
-- **Production Ready**: Yes ✅
-- **Test Coverage**: Comprehensive ✅
-- **Database**: 10 tables initialized ✅
+- **Sections Completed**: 1-20
+- **Production Ready**: Yes
+- **Test Coverage**: Comprehensive
+- **Database**: 10 tables initialized
 
-## 🤝 Contributing
+## Contributing
 
 See [Development Guide](docs/DEVELOPMENT.md) for contribution guidelines.
 
-## 📝 License
+## License
 
 MIT License - see LICENSE file for details
 
-## 🔗 Links
+## Links
 
 - **API Docs**: http://localhost:8000/docs
 - **Health Check**: http://localhost:8000/health
@@ -199,4 +199,4 @@ MIT License - see LICENSE file for details
 
 ---
 
-**Built with ❤️ using FastAPI**
+**Built with FastAPI**
